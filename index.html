@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#4A90E2" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Krom FM</title>
+  <link rel="manifest" href="/manifest.json" />
+</head>
+<body>
+  <!-- ===== SPLASH SCREEN ===== -->
+  <div id="splash-screen" class="screen splash-screen">
+    <!-- Shared shapes for the note/spark burst -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <defs>
+        <symbol id="music-note" viewBox="0 0 40 50">
+          <ellipse cx="11" cy="40" rx="9" ry="6.5" transform="rotate(-18 11 40)" fill="currentColor"/>
+          <rect x="17" y="3" width="4.5" height="38" rx="2.2" fill="currentColor"/>
+          <path d="M21.5 3 C34 6 36.5 20 24 27 C30 19 28 8 21.5 11 Z" fill="currentColor"/>
+        </symbol>
+        <symbol id="spark-star" viewBox="0 0 20 20">
+          <path d="M10 0 L12.2 7.8 L20 10 L12.2 12.2 L10 20 L7.8 12.2 L0 10 L7.8 7.8 Z" fill="currentColor"/>
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="splash-stage">
+      <div class="radio-wrap">
+        <svg class="note note1" viewBox="0 0 40 50"><use href="#music-note"/></svg>
+        <svg class="note note2" viewBox="0 0 40 50"><use href="#music-note"/></svg>
+        <svg class="note note3" viewBox="0 0 40 50"><use href="#music-note"/></svg>
+        <svg class="note note4" viewBox="0 0 40 50"><use href="#music-note"/></svg>
+        <svg class="note note5" viewBox="0 0 40 50"><use href="#music-note"/></svg>
+        <svg class="spark spark1" viewBox="0 0 20 20"><use href="#spark-star"/></svg>
+        <svg class="spark spark2" viewBox="0 0 20 20"><use href="#spark-star"/></svg>
+        <svg class="spark spark3" viewBox="0 0 20 20"><use href="#spark-star"/></svg>
+
+        <svg class="radio-big" viewBox="0 -22 200 152">
+          <!-- feet -->
+          <rect x="38" y="122" width="14" height="10" rx="4" fill="#2d5f8a"/>
+          <rect x="148" y="122" width="14" height="10" rx="4" fill="#2d5f8a"/>
+          <!-- antenna -->
+          <line x1="150" y1="40" x2="180" y2="-12" stroke="#2d5f8a" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="180" cy="-12" r="5.5" fill="#F5A623"/>
+          <!-- handle -->
+          <path d="M55 40 C55 14 145 14 145 40" fill="none" stroke="#2d5f8a" stroke-width="8" stroke-linecap="round"/>
+          <!-- body -->
+          <rect x="20" y="38" width="160" height="90" rx="24" fill="#4A90E2"/>
+          <rect x="20" y="38" width="160" height="90" rx="24" fill="none" stroke="#2d5f8a" stroke-width="3"/>
+          <!-- speaker -->
+          <circle cx="68" cy="86" r="30" fill="#1e3a5f"/>
+          <circle cx="68" cy="86" r="30" fill="none" stroke="#173049" stroke-width="2"/>
+          <rect x="60" y="66" width="5" height="40" rx="2.5" fill="#3a6a94" opacity="0.9"/>
+          <rect x="70" y="66" width="5" height="40" rx="2.5" fill="#3a6a94" opacity="0.9"/>
+          <rect x="80" y="66" width="5" height="40" rx="2.5" fill="#3a6a94" opacity="0.9"/>
+          <!-- dials -->
+          <circle cx="140" cy="72" r="14" fill="#F5A623" stroke="#fff" stroke-width="3"/>
+          <circle cx="140" cy="104" r="9" fill="#E74C3C" stroke="#fff" stroke-width="2.5"/>
+        </svg>
+      </div>
+
+      <div class="dj-wrap">
+        <svg class="dj-svg" viewBox="0 0 240 210">
+          <circle cx="120" cy="118" r="92" fill="#9B59B6"/>
+          <circle cx="120" cy="118" r="92" fill="none" stroke="#7d3f9c" stroke-width="4"/>
+
+          <!-- turntables -->
+          <g>
+            <circle cx="42" cy="168" r="28" fill="#26232f"/>
+            <circle cx="42" cy="168" r="10" fill="#F5A623"/>
+            <circle cx="198" cy="168" r="28" fill="#26232f"/>
+            <circle cx="198" cy="168" r="10" fill="#F5A623"/>
+          </g>
+
+          <g class="dj-body-group">
+            <!-- left arm (still, resting) -->
+            <path d="M96 128 C78 138 62 150 50 160" fill="none" stroke="#4A90E2" stroke-width="16" stroke-linecap="round"/>
+            <circle cx="48" cy="162" r="11" fill="#FFD9A0"/>
+
+            <!-- torso -->
+            <rect x="90" y="98" width="60" height="68" rx="20" fill="#4A90E2"/>
+            <circle cx="120" cy="122" r="9" fill="#F5A623"/>
+
+            <!-- head -->
+            <circle cx="120" cy="66" r="34" fill="#FFD9A0"/>
+            <!-- ear headphone cups (behind cap edges) -->
+            <circle cx="88" cy="70" r="12" fill="#F5A623"/>
+            <circle cx="152" cy="70" r="12" fill="#F5A623"/>
+            <!-- cap: rounded dome sitting on top of the head, plus a front brim -->
+            <path d="M84 62 C84 28 156 28 156 62 C156 54 84 54 84 62 Z" fill="#2d5f8a"/>
+            <ellipse cx="120" cy="42" rx="36" ry="24" fill="#3a72a8"/>
+            <path d="M84 60 C84 26 156 26 156 60 L156 52 C156 52 120 40 84 52 Z" fill="#2d5f8a"/>
+            <ellipse cx="94" cy="60" rx="24" ry="10" fill="#2d5f8a"/>
+            <circle cx="120" cy="20" r="4" fill="#3a72a8"/>
+            <!-- face -->
+            <path d="M104 66 Q110 71 116 66" fill="none" stroke="#1e3a5f" stroke-width="3.4" stroke-linecap="round"/>
+            <path d="M124 66 Q130 71 136 66" fill="none" stroke="#1e3a5f" stroke-width="3.4" stroke-linecap="round"/>
+            <path d="M104 80 Q120 95 136 80" fill="none" stroke="#1e3a5f" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="100" cy="76" r="5" fill="#ff9d9d" opacity="0.6"/>
+            <circle cx="140" cy="76" r="5" fill="#ff9d9d" opacity="0.6"/>
+          </g>
+
+          <!-- scratching hand -->
+          <g class="dj-hand-right">
+            <path d="M144 128 C162 136 178 148 190 158" fill="none" stroke="#4A90E2" stroke-width="16" stroke-linecap="round"/>
+            <circle cx="192" cy="160" r="11" fill="#FFD9A0"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <h1 class="splash-title">Krom FM</h1>
+    <p class="splash-loading"><span id="splash-phrase">Warming up the mic</span><span class="dots">...</span></p>
+    <p class="splash-tap-hint hidden" id="splash-tap-hint">Tap to start!</p>
+  </div>
+
+  <!-- ===== BUILDER SCREEN ===== -->
+  <div id="builder-screen" class="screen hidden">
+    <header>
+      <div class="logo">
+        <span class="radio-icon">📻</span>
+        <h1>Krom FM</h1>
+      </div>
+      <span class="mode-badge">DJ Mode</span>
+    </header>
+
+    <h2 class="screen-title">The DJ Raf Show</h2>
+
+    <div class="playlist-box">
+      <label>🎵 Songs from</label>
+      <div class="source-row">
+        <span id="source-name" class="source-name">Nothing picked yet</span>
+      </div>
+      <div class="source-actions">
+        <button id="use-playing-btn" class="small-btn">▶ Use what's playing</button>
+        <button id="choose-playlist-btn" class="small-btn">📋 Choose playlist</button>
+      </div>
+      <small id="source-hint"></small>
+    </div>
+
+    <div class="playlist-box">
+      <label>🎶 Background music (for talk-over)</label>
+      <div class="bed-pills" id="bed-pills">
+        <button class="bed-pill" data-bed="chill">😎 Chill</button>
+        <button class="bed-pill" data-bed="hype">⚡ Hype</button>
+        <button class="bed-pill" data-bed="serious">🕵️ Serious</button>
+      </div>
+      <button id="bed-preview-btn" class="small-btn bed-preview">▶ Listen</button>
+    </div>
+
+    <div id="blocks-list" class="blocks-list">
+      <!-- Blocks will be rendered here by JS -->
+    </div>
+
+    <div class="add-block-area">
+      <button id="add-block-btn" class="btn btn-add">+ Add Block</button>
+    </div>
+
+    <div class="loop-toggle-area">
+      <label class="loop-label">
+        <input type="checkbox" id="loop-toggle" />
+        <span class="toggle-slider"></span>
+        <span class="loop-text">🔁 Loop the show</span>
+      </label>
+    </div>
+
+    <button id="start-show-btn" class="btn btn-start">▶ Start Show</button>
+    <button id="restart-show-link" class="link-btn hidden">Restart Current Show</button>
+    <button id="new-show-link" class="link-btn hidden">Start a New Show</button>
+
+    <p class="helper-text">Drag the blocks to change the order!<br>Tap + to add more</p>
+
+    <div class="spotify-status" id="spotify-status">
+      <button id="login-btn" class="btn btn-spotify">Connect Spotify</button>
+      <span id="spotify-connected" class="hidden">✅ Spotify connected</span>
+      <div id="device-hint" class="device-hint hidden">
+        <p id="device-hint-text">Open the Spotify app on this phone (so it shows up as a speaker), then tap Refresh.</p>
+        <button id="refresh-device-btn" class="btn btn-secondary">🔁 Refresh</button>
+      </div>
+    </div>
+
+    <p id="app-version-tag" class="version-tag"></p>
+  </div>
+
+  <!-- ===== LIVE SHOW SCREEN ===== -->
+  <div id="live-screen" class="screen hidden">
+    <header>
+      <div class="logo">
+        <span class="radio-icon">📻</span>
+        <h1>Krom FM</h1>
+      </div>
+      <span class="live-badge">LIVE</span>
+    </header>
+
+    <div class="status-card" id="status-card">
+      <div class="status-label" id="status-label">Now Playing</div>
+      <div class="status-main" id="status-main">Song 1 of 4</div>
+      <div class="status-sub" id="status-sub">Getting ready...</div>
+      <div class="progress-bar-hit" id="progress-bar-hit">
+        <div class="progress-bar" id="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+      <div class="time-row">
+        <span id="time-elapsed">0:00</span>
+        <span id="time-remaining"></span>
+      </div>
+    </div>
+
+    <div class="trouble hidden" id="trouble"></div>
+
+    <div class="next-up" id="next-up">
+      Next up: —
+    </div>
+
+    <div class="live-buttons">
+      <button id="finished-talking-btn" class="btn btn-finished">I'm finished talking → Next</button>
+      <button id="skip-song-btn" class="btn btn-skip">Skip this song</button>
+      <button id="pause-btn" class="btn btn-pause">Pause everything</button>
+      <button id="modify-session-btn" class="btn btn-secondary">📝 Modify Session</button>
+      <button id="stop-show-btn" class="btn btn-stop">Stop Show</button>
+    </div>
+
+    <div class="timetable-wrap">
+      <div class="timetable-label">🎶 What's Coming Up</div>
+      <div id="timetable" class="timetable"></div>
+    </div>
+  </div>
+
+  <!-- ===== ADD BLOCK MODAL ===== -->
+  <div id="add-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Add a Block</h3>
+      <button class="block-type-btn" data-type="songs">🎵 Play Songs</button>
+      <button class="block-type-btn" data-type="jingle">🎤 Jingle</button>
+      <button class="block-type-btn" data-type="talk">🗣️ Weather, Traffic, News</button>
+      <button class="block-type-btn" data-type="bed">🎶 DJ Talk</button>
+      <button class="block-type-btn" data-type="commercial">📢 Commercial Break</button>
+      <button id="close-modal" class="btn btn-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===== BLOCK MODE MODAL (quiet / record / background) ===== -->
+  <div id="mode-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="mode-modal-title">How should this work?</h3>
+      <button class="mode-btn" data-mode="quiet">🤫 Quiet</button>
+      <button class="mode-btn" data-mode="record-quiet">🎙️ Record my own voice</button>
+      <button class="mode-btn" data-mode="record-bg">🎙️🎶 Record my own voice – background music</button>
+      <button class="mode-btn" data-mode="background">🎶 Background Music only</button>
+      <button id="close-mode-modal" class="btn btn-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===== DURATION MODAL (quiet length: seconds or minutes) ===== -->
+  <div id="duration-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="duration-modal-title">How long?</h3>
+      <div class="duration-row">
+        <input type="number" id="duration-value" min="1" max="180" value="15" inputmode="numeric" />
+        <select id="duration-unit">
+          <option value="seconds">seconds</option>
+          <option value="minutes">minutes</option>
+        </select>
+      </div>
+      <button id="duration-save-btn" class="btn btn-start">✅ Save</button>
+      <button id="close-duration-modal" class="btn btn-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===== RECORD MODAL ===== -->
+  <div id="recorder-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Record your voice</h3>
+      <p class="recorder-hint" id="recorder-hint">Tap the button, say your bit, then tap stop.</p>
+      <button id="recorder-main-btn" class="btn btn-record">⏺ Start Recording</button>
+      <div id="recorder-timer" class="record-timer hidden">00:00</div>
+      <audio id="recorder-preview" class="hidden" controls></audio>
+      <button id="recorder-save-btn" class="btn btn-start hidden">✅ Use This Recording</button>
+      <button id="recorder-retry-btn" class="btn btn-secondary hidden">🔁 Record Again</button>
+      <button id="close-recorder-modal" class="btn btn-cancel">Cancel</button>
+    </div>
+  </div>
+
+
+  <!-- ===== SONGS BLOCK SHEET ===== -->
+  <div id="songs-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="songs-modal-title">Songs</h3>
+      <div class="count-row">
+        <button class="num-btn dark" id="songs-minus">−</button>
+        <span id="songs-count" class="big-count">3</span>
+        <button class="num-btn dark" id="songs-plus">+</button>
+      </div>
+      <div id="songs-list" class="pick-list"></div>
+      <p class="recorder-hint" id="songs-hint">Tap 🔁 to swap a song.</p>
+      <button id="songs-done" class="btn btn-start">Done</button>
+    </div>
+  </div>
+
+  <!-- ===== PICK A SONG / PLAYLIST ===== -->
+  <div id="pick-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="pick-title">Pick one</h3>
+      <div id="pick-list" class="pick-list tall"></div>
+      <button id="close-pick-modal" class="btn btn-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===== END SCREEN ===== -->
+  <div id="end-screen" class="screen hidden">
+    <div class="end-content">
+      <h2>🎉 Show finished!</h2>
+      <p>Great job, DJ!</p>
+      <button id="play-again-btn" class="btn btn-start">Play it again</button>
+      <button id="back-to-builder-btn" class="btn btn-secondary">Build a new show</button>
+    </div>
+  </div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
