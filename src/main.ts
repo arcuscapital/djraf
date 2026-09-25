@@ -755,7 +755,12 @@ async function startShow(from: number, tracks: Map<string, Track[]>) {
   await current.start(from);
 }
 
+let starting = false;
 async function prepareAndStart(from: number) {
+  starting = true;
+  try { await prepareAndStartInner(from); } finally { starting = false; }
+}
+async function prepareAndStartInner(from: number) {
   if (!isLoggedIn()) { alert("Please connect Spotify first!"); return; }
   const hasSongs = blocks.some(b => b.type === "songs");
   if (hasSongs && !(await ensureDevice())) {
@@ -865,7 +870,7 @@ async function init() {
   else showLoggedOut();
 }
 
-watchForUpdates(() => !!current?.running || recorder.recording);
+watchForUpdates(() => starting || !!current?.running || recorder.recording || !recorderModal.classList.contains("hidden"));
 runSplash();
 void init();
 
