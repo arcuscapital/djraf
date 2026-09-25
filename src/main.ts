@@ -374,11 +374,11 @@ function openRecorder(bed: RecBed | null) {
   recBed = bed;
   resetRecorderUI();
   $("recorder-hint").textContent = bed
-    ? `Tap the button and talk — ${bedName(bed)} music plays while you record, and plays under it on air.`
+    ? `Tap the button and talk — ${bedName(bed)} plays while you record, and plays under it on air.`
     : "Tap the button, say your bit, then tap stop.";
   openModal(recorderModal);
 }
-const bedName = (b: RecBed) => (b === "file" ? `“${store.bedFileName() ?? "your song"}”` : ({ chill: "chill", hype: "hype", serious: "serious" })[b]);
+const bedName = (b: RecBed) => (b === "file" ? `“${store.bedFileName() ?? "your song"}”` : `${({ chill: "chill", hype: "hype", serious: "serious" })[b]} music`);
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 // The first time, the phone asks permission to use the mic. Until he answers,
@@ -906,6 +906,10 @@ async function startShow(from: number, tracks: Map<string, Track[]>) {
   resumeFrom = null;
   resumeTracks = null;
   pauseBtn.textContent = "Pause everything";
+  // Don't flash the last show's leftovers while the first block gets going.
+  ui.status("Krom FM", "Getting ready…", "");
+  ui.progress(0, null);
+  ui.songList(null, 0);
   show(builderScreen, false);
   show(endScreen, false);
   show(liveScreen, true);
