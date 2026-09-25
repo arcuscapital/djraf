@@ -67,6 +67,16 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
   });
 }
 
+// A background music file picked from this device. Stays on this device only
+// (the site is public, so music files are never put into the app itself).
+const BED_FILE_KEY = "__bed_file__";
+export async function saveBedFile(blob: Blob, name: string) {
+  await saveRecording(BED_FILE_KEY, blob);
+  write("djraf_bed_file_name", name);
+}
+export const loadBedFile = () => loadRecording(BED_FILE_KEY);
+export const bedFileName = () => read<string | null>("djraf_bed_file_name", null);
+
 export const saveRecording = (id: string, blob: Blob) => tx<void>("readwrite", s => s.put(blob, id));
 export const loadRecording = (id: string) => tx<Blob | undefined>("readonly", s => s.get(id)).then(b => b ?? null);
 export const deleteRecording = (id: string) => tx<void>("readwrite", s => s.delete(id));

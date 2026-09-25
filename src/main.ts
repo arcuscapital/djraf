@@ -1,5 +1,5 @@
 import "./style.css";
-import { BedPlayer, Recorder, unlockAudio } from "./audio";
+import { BedPlayer, LoopPlayer, Recorder, unlockAudio } from "./audio";
 import { handleRedirect, isLoggedIn, login } from "./auth";
 import { Show, TYPE_LABELS } from "./show";
 import { tryDuck } from "./spotifyBed";
@@ -313,9 +313,11 @@ document.querySelectorAll<HTMLButtonElement>(".mode-btn").forEach(btn => {
   });
 });
 
-// Recordings with music use the app's own music: turning a Spotify song down
-// on a phone turns the whole phone down, which would make his voice quiet too.
-function recordingBed(): BedId {
+// Recordings with music use music the app plays itself (built-in, or the music
+// file saved on this phone): turning a Spotify song down on a phone turns the
+// whole phone down, which would make his voice quiet too.
+type RecBed = BedId | "file";
+function recordingBed(): RecBed {
   return bedChoice === "spotify" ? "chill" : bedChoice;
 }
 
@@ -331,12 +333,25 @@ function finalize() {
 // ---------- recorder ----------
 const recorder = new Recorder();
 const recordBed = new BedPlayer();
+const recordLoop = new LoopPlayer();
+async function startRecordBed(bed: RecBed) {
+  if (bed === "file") {
+    const blob = await store.loadBedFile().catch(() => null);
+    if (blob && (await recordLoop.start(blob, 0.3))) return;
+    bed = "chill";
+  }
+  await recordBed.start(bed, 0.3);
+}
+function stopRecordBed(fadeMs: number) {
+  if (recordBed.playing) recordBed.stop(fadeMs);
+  if (recordLoop.playing) recordLoop.stop(fadeMs);
+}
 const recMain = $<HTMLButtonElement>("recorder-main-btn");
 const recTimer = $("recorder-timer");
 const recPreview = $<HTMLAudioElement>("recorder-preview");
 const recSave = $("recorder-save-btn");
 const recRetry = $("recorder-retry-btn");
-let recBed: BedId | null = null;
+let recBed: RecBed | null = null;
 let recBlob: Blob | null = null;
 let recSeconds = 0;
 let recInterval: number | null = null;
@@ -355,7 +370,7 @@ function resetRecorderUI() {
   recBlob = null;
   $("close-recorder-modal").textContent = "Cancel";
 }
-function openRecorder(bed: BedId | null) {
+function openRecorder(bed: RecBed | null) {
   recBed = bed;
   resetRecorderUI();
   $("recorder-hint").textContent = bed
@@ -363,7 +378,7 @@ function openRecorder(bed: BedId | null) {
     : "Tap the button, say your bit, then tap stop.";
   openModal(recorderModal);
 }
-const bedName = (b: BedId) => ({ chill: "chill", hype: "hype", serious: "serious" })[b];
+const bedName = (b: RecBed) => (b === "file" ? `“${store.bedFileName() ?? "your song"}”` : ({ chill: "chill", hype: "hype", serious: "serious" })[b]);
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 // The first time, the phone asks permission to use the mic. Until he answers,
@@ -386,7 +401,7 @@ recMain.addEventListener("click", async () => {
     micStarting = false;
   }
   if (recorderModal.classList.contains("hidden")) { void recorder.stop(); return; } // closed while waiting
-  if (recBed) void recordBed.start(recBed, 0.3);
+  if (recBed) void startRecordBed(recBed);
   recSeconds = 0;
   recTimer.textContent = `0:00 / ${fmtLimit}`;
   show(recTimer, true);
@@ -400,7 +415,7 @@ recMain.addEventListener("click", async () => {
 
 async function finishRecording() {
   if (recInterval !== null) { clearInterval(recInterval); recInterval = null; }
-  recordBed.stop(600);
+  stopRecordBed(600);
   const blob = await recorder.stop();
   if (!blob) return;
   recBlob = blob;
@@ -432,7 +447,7 @@ async function keepTake() {
 function cancelRecording() {
   if (recInterval !== null) { clearInterval(recInterval); recInterval = null; }
   if (recorder.recording) void recorder.stop();
-  if (recordBed.playing) recordBed.stop(300);
+  stopRecordBed(300);
   recPreview.pause();
 }
 recRetry.addEventListener("click", resetRecorderUI);
@@ -560,13 +575,18 @@ $("choose-playlist-btn").addEventListener("click", async () => {
 
 // ====================== BACKGROUND MUSIC CHOICE ======================
 const previewBed = new BedPlayer();
+const previewLoop = new LoopPlayer();
 let previewTimer: number | null = null;
 let previewingSpotify = false;
 function renderBeds() {
   document.querySelectorAll<HTMLButtonElement>(".bed-pill").forEach(b => b.classList.toggle("selected", b.dataset.bed === bedChoice));
   const line = $("bed-song");
-  show(line, bedChoice === "spotify");
-  line.innerHTML = `🎵 ${escapeHtml(bedTrack.name)} – ${escapeHtml(bedTrack.artist)} <u>change</u>`;
+  // The "Song" pill covers both a Spotify song and the music file on this phone.
+  document.querySelector<HTMLButtonElement>('.bed-pill[data-bed="spotify"]')?.classList.toggle("selected", bedChoice === "spotify" || bedChoice === "file");
+  show(line, bedChoice === "spotify" || bedChoice === "file");
+  line.innerHTML = bedChoice === "file"
+    ? `📁 ${escapeHtml(store.bedFileName() ?? "Your song")} <small>(saved on this phone)</small> <u>change</u>`
+    : `🎵 ${escapeHtml(bedTrack.name)} – ${escapeHtml(bedTrack.artist)} <u>change</u>`;
 }
 function chooseBed(c: BedChoice) {
   bedChoice = c;
@@ -580,7 +600,9 @@ document.querySelectorAll<HTMLButtonElement>(".bed-pill").forEach(b => {
     const c = b.dataset.bed as BedChoice;
     // "Song": first tap picks it straight away (Bumblebee unless he chose
     // another); tapping it again, or the song's name, changes the song.
-    if (c === "spotify" && bedChoice === "spotify") { void pickBedSong(); return; }
+    if (c === "spotify" && (bedChoice === "spotify" || bedChoice === "file")) { void pickBedSong(); return; }
+    // First tap on Song: prefer the music file on this phone if there is one.
+    if (c === "spotify" && store.bedFileName()) { chooseBed("file"); if (previewBed.playing || previewingSpotify) void startPreview(); return; }
     chooseBed(c);
     if (previewBed.playing || previewingSpotify) void startPreview();
   });
@@ -599,6 +621,9 @@ function setBedTrack(t: Track) {
 // even before he's chosen where the show's songs come from.
 async function pickBedSong() {
   const rows: PickRow[] = [];
+  const fileName = store.bedFileName();
+  if (fileName) rows.push({ title: `📁 ${fileName}`, sub: "Saved on this phone — plays quietly, no Spotify needed", onPick: () => { chooseBed("file"); closeAllModals(); } });
+  rows.push({ title: "📁 Use a music file on this phone…", onPick: () => { closeAllModals(); $<HTMLInputElement>("bed-file-input").click(); } });
   const add = (t: Track, label?: string) => {
     if (rows.some(r => r.title.endsWith(t.name) && r.sub === t.artist)) return;
     rows.push({ title: (label ?? "") + t.name, sub: t.artist, onPick: () => setBedTrack(t) });
@@ -615,6 +640,23 @@ async function pickBedSong() {
   for (const t of source?.pool ?? []) add(t);
   openPicker("Pick a song to talk over", rows);
 }
+
+// The chosen music file is saved on this device only (IndexedDB), like his
+// recordings — never uploaded or added to the public site.
+$<HTMLInputElement>("bed-file-input").addEventListener("change", async e => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  const suggested = /^WhatsApp Audio/i.test(file.name) ? "My background song" : file.name.replace(/\.[^.]+$/, "");
+  const name = (prompt("What's this song called?", suggested) ?? suggested).trim() || suggested;
+  await unlockAudio();
+  const test = new LoopPlayer();
+  if (!(await test.start(file, 0.0001))) { alert("That file can't be played. Try a different music file."); return; }
+  test.stop(0);
+  await store.saveBedFile(file, name);
+  chooseBed("file");
+});
 
 async function pasteBedLink() {
   const link = prompt("Paste a Spotify song link:");
@@ -635,6 +677,10 @@ async function startPreview() {
     previewingSpotify = true;
     await sp.setRepeat(deviceId!, "off");
     await sp.playUris(deviceId!, [bedTrack.uri]);
+  } else if (bedChoice === "file") {
+    await unlockAudio();
+    const blob = await store.loadBedFile().catch(() => null);
+    if (!blob || !(await previewLoop.start(blob, 0.5))) return;
   } else {
     await unlockAudio();
     await previewBed.start(bedChoice, 0.7);
@@ -644,12 +690,13 @@ async function startPreview() {
 }
 function stopPreview() {
   if (previewBed.playing) previewBed.stop(500);
+  if (previewLoop.playing) previewLoop.stop(500);
   if (previewingSpotify && deviceId) void sp.pause(deviceId);
   previewingSpotify = false;
   $("bed-preview-btn").textContent = "▶ Listen";
   if (previewTimer !== null) { clearTimeout(previewTimer); previewTimer = null; }
 }
-$("bed-preview-btn").addEventListener("click", () => (previewBed.playing || previewingSpotify ? stopPreview() : void startPreview()));
+$("bed-preview-btn").addEventListener("click", () => (previewBed.playing || previewLoop.playing || previewingSpotify ? stopPreview() : void startPreview()));
 
 // ====================== LOOP ======================
 const loopToggle = $<HTMLInputElement>("loop-toggle");

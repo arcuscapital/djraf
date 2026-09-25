@@ -1,8 +1,8 @@
-import { BedPlayer, ClipPlayer, pauseAll, playChime, resumeAll } from "./audio";
+import { BedPlayer, ClipPlayer, LoopPlayer, pauseAll, playChime, resumeAll } from "./audio";
 import { SongRun } from "./songRun";
 import * as sp from "./spotify";
 import { SpotifyBed } from "./spotifyBed";
-import { loadRecording } from "./storage";
+import { loadBedFile, loadRecording } from "./storage";
 import type { BedChoice, Block, Track } from "./types";
 
 export interface BedSetting { choice: BedChoice; track: Track | null }
@@ -20,6 +20,21 @@ function makeBed(choice: BedChoice, track: Track | null | undefined, deviceId: s
   if (choice === "spotify" && track && deviceId) {
     const b = new SpotifyBed(deviceId, track);
     return { start: () => b.start(Math.round(volume * 100)), pause: () => b.pause(), resume: () => b.resume(), stop: () => b.stop(), handVolume: () => !b.ducked };
+  }
+  if (choice === "file") {
+    // The music file saved on this device; falls back to Chill if it's missing.
+    const loop = new LoopPlayer();
+    const fallback = new BedPlayer();
+    return {
+      start: async () => {
+        const blob = await loadBedFile().catch(() => null);
+        if (!blob || !(await loop.start(blob, volume))) await fallback.start("chill", volume);
+      },
+      pause: () => pauseAll(),
+      resume: () => resumeAll(),
+      stop: () => { loop.stop(1200); if (fallback.playing) fallback.stop(1200); },
+      handVolume: () => false
+    };
   }
   const b = new BedPlayer();
   const id = choice === "spotify" ? "chill" : choice;
@@ -141,7 +156,7 @@ export class Show {
   // off mid-sentence. Background music loops for as long as he talks.
   private talk(b: Block, next: () => void): Segment {
     const setting = this.bed();
-    const bed = b.mode === "background" ? makeBed(setting.choice, setting.track, this.deviceId, setting.choice === "spotify" ? 0.3 : 0.7) : null;
+    const bed = b.mode === "background" ? makeBed(setting.choice, setting.track, this.deviceId, setting.choice === "spotify" ? 0.3 : setting.choice === "file" ? 0.5 : 0.7) : null;
     const label = TYPE_LABELS[b.type];
     let over = false;
     if (bed) {

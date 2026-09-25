@@ -205,6 +205,54 @@ export class BedPlayer {
   get playing(): boolean { return this.out !== null; }
 }
 
+// ---------- a music file, looped (background music saved on this device) ----------
+// Played by the app itself, so it can be set to a quiet level automatically
+// (Spotify won't let apps change the volume on Raf's phone) and loops
+// seamlessly for however long he talks.
+export class LoopPlayer {
+  private src: AudioBufferSourceNode | null = null;
+  private out: GainNode | null = null;
+
+  async start(blob: Blob, volume = 0.5): Promise<boolean> {
+    this.stop(0);
+    const c = await acquire();
+    let buf: AudioBuffer;
+    try {
+      buf = await c.decodeAudioData(await blob.arrayBuffer());
+    } catch {
+      release();
+      return false;
+    }
+    const out = c.createGain();
+    out.gain.setValueAtTime(0.0001, c.currentTime);
+    out.gain.linearRampToValueAtTime(volume, c.currentTime + 0.6);
+    out.connect(master);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(out);
+    src.start();
+    this.src = src;
+    this.out = out;
+    return true;
+  }
+
+  stop(fadeMs = 1200): void {
+    const src = this.src;
+    const out = this.out;
+    this.src = null;
+    this.out = null;
+    if (!src || !out || !ctx) return;
+    const c = ctx;
+    out.gain.cancelScheduledValues(c.currentTime);
+    out.gain.setValueAtTime(out.gain.value, c.currentTime);
+    out.gain.linearRampToValueAtTime(0.0001, c.currentTime + Math.max(0.01, fadeMs / 1000));
+    setTimeout(() => { try { src.stop(); } catch { /* already stopped */ } out.disconnect(); release(); }, fadeMs + 100);
+  }
+
+  get playing(): boolean { return this.src !== null; }
+}
+
 // ---------- recorded voice playback ----------
 // Decoded into memory rather than an <audio> element: exact length (recorder
 // WebM files often report an unknown duration), and pausing is just suspending

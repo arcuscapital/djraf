@@ -1,8 +1,9 @@
 export type BlockType = "songs" | "jingle" | "talk" | "bed" | "commercial";
 export type Mode = "quiet" | "record" | "background";
 export type BedId = "chill" | "hype" | "serious";
-// Background music for talk-over: a built-in bed, or a Spotify song he picked.
-export type BedChoice = BedId | "spotify";
+// Background music for talk-over: a built-in bed, a Spotify song he picked, or
+// a music file saved on this device.
+export type BedChoice = BedId | "spotify" | "file";
 
 export interface Track {
   uri: string;
