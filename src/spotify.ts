@@ -158,6 +158,7 @@ export const resume = (deviceId: string) => command(`/me/player/play?device_id=$
 export const next = (deviceId: string) => command(`/me/player/next?device_id=${deviceId}`, "POST");
 export const setRepeat = (deviceId: string, state: "off" | "track" | "context") => command(`/me/player/repeat?state=${state}&device_id=${deviceId}`, "PUT");
 export const setShuffle = (deviceId: string, on: boolean) => command(`/me/player/shuffle?state=${on}&device_id=${deviceId}`, "PUT");
+export const seek = (deviceId: string, ms: number) => command(`/me/player/seek?position_ms=${Math.max(0, Math.round(ms))}&device_id=${deviceId}`, "PUT");
 export const setVolume = (deviceId: string, percent: number) => command(`/me/player/volume?volume_percent=${Math.round(percent)}&device_id=${deviceId}`, "PUT");
 export const transfer =(deviceId: string) => command(`/me/player`, "PUT", { device_ids: [deviceId], play: false });
 export const playUris = (deviceId: string, uris: string[]) => command(`/me/player/play?device_id=${deviceId}`, "PUT", { uris, position_ms: 0 });

@@ -56,6 +56,7 @@ interface Segment {
   resume(): Promise<unknown> | void;
   stop(): void;
   skip?(): Promise<void> | void; // "Skip this song"
+  seek?(ms: number): Promise<void> | void; // dragging the progress bar (songs only)
   done?(): void; // "I'm finished talking"
 }
 
@@ -132,7 +133,7 @@ export class Show {
       onTrouble: msg => this.ui.trouble(msg)
     });
     void run.start();
-    return { pause: () => run.pause(), resume: () => run.resume(), stop: () => run.stop(), skip: () => run.skip() };
+    return { pause: () => run.pause(), resume: () => run.resume(), stop: () => run.stop(), skip: () => run.skip(), seek: ms => run.seek(ms) };
   }
 
   // ---------- he talks (quietly, or over background music) ----------
@@ -227,6 +228,8 @@ export class Show {
   }
 
   skipSong(): void { void this.seg?.skip?.(); }
+  seekSong(ms: number): void { void this.seg?.seek?.(ms); }
+  get canSeek(): boolean { return !!this.seg?.seek; }
   finishedTalking(): void { this.seg?.done?.(); }
 
   stop(): void {

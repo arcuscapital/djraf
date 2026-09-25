@@ -107,6 +107,14 @@ export class SongRun {
     this.schedule(400);
   }
 
+  // Jump within the current song (dragging the progress bar). Seeking into the
+  // very end of the last song is fine: Spotify just finishes the list and stops.
+  async seek(ms: number): Promise<void> {
+    if (this.stopped) return;
+    await sp.seek(this.deviceId, ms);
+    if (!this.pausedByUs) this.schedule(400);
+  }
+
   async pause(): Promise<void> {
     this.pausedByUs = true;
     if (this.timer !== null) { clearTimeout(this.timer); this.timer = null; }

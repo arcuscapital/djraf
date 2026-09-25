@@ -688,6 +688,37 @@ const pauseBtn = $("pause-btn");
 const trouble = $("trouble");
 
 let noticeUntil = 0;
+
+// ---------- drag the progress bar to jump within a song (songs only) ----------
+let scrubbing = false;
+let scrubDuration = 0;
+const barHit = $("progress-bar-hit");
+const bar = $("progress-bar");
+function scrubFraction(e: PointerEvent) {
+  const r = bar.getBoundingClientRect();
+  return r.width > 0 ? Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1) : 0;
+}
+function drawScrub(e: PointerEvent) {
+  const sec = scrubFraction(e) * scrubDuration;
+  progressFill.style.width = scrubFraction(e) * 100 + "%";
+  timeElapsed.textContent = clock(sec);
+  timeRemaining.textContent = "-" + clock(scrubDuration - sec);
+}
+barHit.addEventListener("pointerdown", e => {
+  if (!current?.canSeek || !scrubDuration) return;
+  scrubbing = true;
+  bar.classList.add("scrubbing");
+  try { barHit.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  drawScrub(e);
+});
+barHit.addEventListener("pointermove", e => { if (scrubbing) drawScrub(e); });
+barHit.addEventListener("pointerup", e => {
+  if (!scrubbing) return;
+  scrubbing = false;
+  bar.classList.remove("scrubbing");
+  current?.seekSong(scrubFraction(e) * scrubDuration * 1000);
+});
+barHit.addEventListener("pointercancel", () => { scrubbing = false; bar.classList.remove("scrubbing"); });
 const clock = (s: number) => { const t = Math.max(0, Math.round(s)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
 
 const ui = {
@@ -697,6 +728,8 @@ const ui = {
     statusSub.textContent = sub;
   },
   progress(elapsed: number, duration: number | null) {
+    scrubDuration = duration && isFinite(duration) ? duration : 0;
+    if (scrubbing) return; // don't fight his finger while he's dragging
     if (duration && duration > 0 && isFinite(duration)) {
       progressFill.style.width = Math.min(100, Math.max(0, (elapsed / duration) * 100)) + "%";
       timeElapsed.textContent = clock(elapsed);
