@@ -353,15 +353,26 @@ function openRecorder(bed: BedId | null) {
 const bedName = (b: BedId) => ({ chill: "chill", hype: "hype", serious: "serious" })[b];
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+// The first time, the phone asks permission to use the mic. Until he answers,
+// say so on the button (it used to just sit there) and ignore extra taps, which
+// would otherwise start a second recorder.
+let micStarting = false;
 recMain.addEventListener("click", async () => {
   if (recorder.recording) { void finishRecording(); return; }
+  if (micStarting) return;
+  micStarting = true;
+  recMain.textContent = "🎤 Tap “Allow” to use the microphone…";
   await unlockAudio();
   try {
     await recorder.start();
   } catch {
+    recMain.textContent = "⏺ Start Recording";
     alert("Couldn't use the microphone. Please allow microphone access and try again.");
     return;
+  } finally {
+    micStarting = false;
   }
+  if (recorderModal.classList.contains("hidden")) { void recorder.stop(); return; } // closed while waiting
   if (recBed) void recordBed.start(recBed, 0.3);
   recSeconds = 0;
   recTimer.textContent = `0:00 / ${fmtLimit}`;
