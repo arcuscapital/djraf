@@ -2,6 +2,7 @@ import "./style.css";
 import { BedPlayer, Recorder, unlockAudio } from "./audio";
 import { handleRedirect, isLoggedIn, login } from "./auth";
 import { Show, TYPE_LABELS } from "./show";
+import { tryDuck } from "./spotifyBed";
 import { assignSongs, autoSongsUsed } from "./songs";
 import { fromNowPlaying, fromPlaylist } from "./songSource";
 import * as sp from "./spotify";
@@ -664,6 +665,7 @@ const finishedBtn = $("finished-talking-btn");
 const pauseBtn = $("pause-btn");
 const trouble = $("trouble");
 
+let noticeUntil = 0;
 const clock = (s: number) => { const t = Math.max(0, Math.round(s)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
 
 const ui = {
@@ -703,7 +705,14 @@ const ui = {
       return `<li class="${state}"><span class="run-mark">${mark}</span><span class="run-title">${escapeHtml(t.name)}<small>${escapeHtml(t.artist)}</small></span></li>`;
     }).join("");
   },
+  notice(msg: string) {
+    noticeUntil = Date.now() + 8000;
+    show(trouble, true);
+    trouble.textContent = msg;
+    setTimeout(() => { if (Date.now() >= noticeUntil && trouble.textContent === msg) show(trouble, false); }, 8100);
+  },
   trouble(msg: string | null) {
+    if (!msg && Date.now() < noticeUntil) return; // let a reminder finish showing
     show(trouble, !!msg);
     trouble.textContent = msg ? `🔌 ${msg}` : "";
   },
@@ -830,6 +839,42 @@ pauseBtn.addEventListener("click", async () => {
 $("stop-show-btn").addEventListener("click", exitToBuilder);
 $("play-again-btn").addEventListener("click", () => void prepareAndStart(0));
 $("back-to-builder-btn").addEventListener("click", exitToBuilder);
+
+// ====================== PHONE CHECK (tap the version number) ======================
+// For the parent: checks, on this actual phone, the things that behave
+// differently on a phone than on a computer.
+let checking = false;
+$("app-version-tag").addEventListener("click", async () => {
+  if (checking || current?.running) return;
+  if (!isLoggedIn()) { alert("Connect Spotify first, then tap the version number again."); return; }
+  if (!(await ensureDevice()) || !deviceId) { alert("Open the Spotify app on this phone first, then tap the version number again."); return; }
+  checking = true;
+  $("app-version-tag").textContent = "Checking this phone…";
+  const lines: string[] = [];
+  try {
+    const d = (await sp.getDevices()).find(x => x.id === deviceId);
+    lines.push(`Spotify speaker: ${d?.name ?? "?"} (${d?.type ?? "?"})`);
+    let before: number | null = null;
+    const target = Math.max(5, (d?.volume_percent ?? 60) - 25);
+    const ok = await tryDuck(deviceId, target, v => { before = v; });
+    if (ok && before !== null) await sp.setVolume(deviceId, before);
+    lines.push(ok
+      ? "✅ Talk-over with a Spotify song: the app can turn Spotify down and back up by itself."
+      : "⚠️ Talk-over with a Spotify song: Spotify won't let the app change the volume on this phone. Raf will be asked to turn it down with the volume buttons (and back up after). Chill / Hype / Serious don't need this.");
+    try {
+      const q = await sp.getQueue();
+      lines.push(q.length ? "✅ “Use what's playing” can read the songs coming up." : "ℹ️ Play a playlist in Spotify so “Use what's playing” has songs to read.");
+    } catch { lines.push("⚠️ Couldn't read Spotify's up-next list — use “Choose playlist” instead."); }
+    try {
+      const mic = await navigator.permissions.query({ name: "microphone" as PermissionName });
+      lines.push(mic.state === "granted" ? "✅ Microphone allowed." : "ℹ️ Microphone: the phone will ask the first time he records — tap Allow.");
+    } catch { /* not supported */ }
+  } finally {
+    checking = false;
+    $("app-version-tag").textContent = "v2 · " + BUILD_ID;
+  }
+  alert(lines.join("\n\n"));
+});
 
 // ====================== SPLASH (same as the original app) ======================
 const SPLASH_DURATION_MS = 4200;

@@ -9,15 +9,21 @@ export interface BedSetting { choice: BedChoice; track: Track | null }
 
 // Background music under talk: either a built-in bed played by the app, or a
 // Spotify song he picked, played quietly on Spotify.
-interface Bed { start(): Promise<void>; pause(): Promise<unknown> | void; resume(): Promise<unknown> | void; stop(): Promise<void> | void }
+interface Bed {
+  start(): Promise<void>;
+  pause(): Promise<unknown> | void;
+  resume(): Promise<unknown> | void;
+  stop(): Promise<void> | void;
+  handVolume(): boolean; // Spotify wouldn't turn itself down — Raf has to use the volume buttons
+}
 function makeBed(choice: BedChoice, track: Track | null | undefined, deviceId: string | null, volume: number): Bed {
   if (choice === "spotify" && track && deviceId) {
     const b = new SpotifyBed(deviceId, track);
-    return { start: () => b.start(Math.round(volume * 100)), pause: () => b.pause(), resume: () => b.resume(), stop: () => b.stop() };
+    return { start: () => b.start(Math.round(volume * 100)), pause: () => b.pause(), resume: () => b.resume(), stop: () => b.stop(), handVolume: () => !b.ducked };
   }
   const b = new BedPlayer();
   const id = choice === "spotify" ? "chill" : choice;
-  return { start: () => b.start(id, volume), pause: () => pauseAll(), resume: () => resumeAll(), stop: () => b.stop(1200) };
+  return { start: () => b.start(id, volume), pause: () => pauseAll(), resume: () => resumeAll(), stop: () => b.stop(1200), handVolume: () => false };
 }
 
 export const TYPE_LABELS: Record<Block["type"], string> = {
@@ -40,6 +46,7 @@ export interface ShowUI {
   buttons(kind: "songs" | "talk" | "clip"): void;
   current(index: number): void;
   trouble(message: string | null): void;
+  notice(message: string): void; // a friendly reminder that goes away by itself
   songList(tracks: Track[] | null, playingIndex: number): void; // this block's songs, or null to hide
   finished(): void;
 }
@@ -135,10 +142,13 @@ export class Show {
     const setting = this.bed();
     const bed = b.mode === "background" ? makeBed(setting.choice, setting.track, this.deviceId, setting.choice === "spotify" ? 0.3 : 0.7) : null;
     const label = TYPE_LABELS[b.type];
+    let over = false;
     if (bed) {
-      void bed.start();
       const what = setting.choice === "spotify" && setting.track ? `🎵 ${setting.track.name}` : "🎶 Background music playing";
       this.ui.status(label, what, "Talk over it! Press green when you're done.");
+      void bed.start().then(() => {
+        if (bed.handVolume() && !over) this.ui.status(label, what, "🔉 Turn the phone volume down, then talk over it! Press green when you're done.");
+      });
     } else {
       const [main, sub] = QUIET_COPY[b.type] ?? ["🎤 Your turn, DJ!", "Speak to your listeners! Press green when you're done."];
       this.ui.status(label, main, sub);
@@ -149,13 +159,16 @@ export class Show {
     this.ui.progress(0, null);
     let timer: number | null = null;
     const tick = () => { elapsed++; this.ui.progress(elapsed, null); timer = window.setTimeout(tick, 1000); };
-    let over = false;
     const finish = () => {
       if (over) return;
       over = true;
       if (timer !== null) clearTimeout(timer);
       timer = null;
-      void Promise.resolve(bed?.stop()).then(next);
+      const remind = bed?.handVolume() ?? false;
+      void Promise.resolve(bed?.stop()).then(() => {
+        next();
+        if (remind) this.ui.notice("🔊 Turn the volume back up for the music!");
+      });
     };
     timer = window.setTimeout(tick, 1000);
     return {

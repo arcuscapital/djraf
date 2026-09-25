@@ -50,7 +50,7 @@ async function command(path: string, method: "PUT" | "POST", body?: unknown): Pr
 }
 
 // ---------- devices ----------
-export interface Device { id: string; name: string; is_active: boolean; type: string; volume_percent: number | null }
+export interface Device { id: string; name: string; is_active: boolean; type: string; volume_percent: number | null; supports_volume?: boolean }
 
 export async function getDevices(): Promise<Device[]> {
   const d = await json<{ devices: Device[] }>("/me/player/devices");
