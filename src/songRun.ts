@@ -81,7 +81,7 @@ export class SongRun {
       }
       case "spilled":
         // Something that isn't ours started (Spotify autoplay, or a loop): stop it now.
-        await sp.pause(this.deviceId);
+        await sp.pauseVerified(this.deviceId);
         return this.finish();
       case "ended":
         return this.finish();
@@ -99,7 +99,7 @@ export class SongRun {
   async skip(): Promise<void> {
     if (this.stopped) return;
     if (this.index >= this.uris.length - 1 || this.index < 0) {
-      await sp.pause(this.deviceId);
+      await sp.pauseVerified(this.deviceId);
       this.finish();
       return;
     }
@@ -110,7 +110,7 @@ export class SongRun {
   async pause(): Promise<void> {
     this.pausedByUs = true;
     if (this.timer !== null) { clearTimeout(this.timer); this.timer = null; }
-    await sp.pause(this.deviceId);
+    await sp.pauseVerified(this.deviceId);
   }
 
   async resume(): Promise<void> {
@@ -122,6 +122,6 @@ export class SongRun {
   stop(pauseSpotify = true): void {
     this.stopped = true;
     if (this.timer !== null) { clearTimeout(this.timer); this.timer = null; }
-    if (pauseSpotify) void sp.pause(this.deviceId);
+    if (pauseSpotify) void sp.pauseVerified(this.deviceId);
   }
 }

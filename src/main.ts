@@ -835,7 +835,7 @@ function exitToBuilderInternal() {
     resumeFrom = current.index;
     resumeTracks = computeTracks();
     current.stop();
-    if (deviceId) void sp.pause(deviceId);
+    if (deviceId) void sp.pauseVerified(deviceId);
   }
   current = null;
   releaseWakeLock();

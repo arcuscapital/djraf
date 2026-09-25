@@ -142,6 +142,18 @@ export async function getPlaylistTracks(id: string): Promise<Track[]> {
 
 // ---------- controlling playback ----------
 export const pause = (deviceId: string) => command(`/me/player/pause?device_id=${deviceId}`, "PUT");
+
+// Spotify sometimes answers "OK" to pause and keeps playing (seen live: the
+// talk-over song carried on after the show ended). Check, and ask again.
+export async function pauseVerified(deviceId: string): Promise<boolean> {
+  for (let i = 0; i < 3; i++) {
+    await pause(deviceId);
+    await sleep(400);
+    const s = await snapshot();
+    if (s.ok && !s.isPlaying) return true;
+  }
+  return false;
+}
 export const resume = (deviceId: string) => command(`/me/player/play?device_id=${deviceId}`, "PUT");
 export const next = (deviceId: string) => command(`/me/player/next?device_id=${deviceId}`, "POST");
 export const setRepeat = (deviceId: string, state: "off" | "track" | "context") => command(`/me/player/repeat?state=${state}&device_id=${deviceId}`, "PUT");

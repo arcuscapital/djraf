@@ -78,7 +78,7 @@ export class Show {
   async start(from = 0): Promise<void> {
     this.running = true;
     this.paused = false;
-    if (this.deviceId) await sp.pause(this.deviceId); // stop whatever Spotify was already playing
+    if (this.deviceId) await sp.pauseVerified(this.deviceId); // stop whatever Spotify was already playing
     this.run(from);
   }
 

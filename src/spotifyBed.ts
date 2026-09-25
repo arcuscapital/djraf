@@ -25,13 +25,13 @@ export class SpotifyBed {
     await sp.setRepeat(this.deviceId, "track");
   }
 
-  pause() { return sp.pause(this.deviceId); }
+  pause() { return sp.pauseVerified(this.deviceId); }
   resume() { return sp.resume(this.deviceId); }
 
   async stop(): Promise<void> {
     if (!this.active) return;
     this.active = false;
-    await sp.pause(this.deviceId);
+    await sp.pauseVerified(this.deviceId);
     await sp.setRepeat(this.deviceId, "off");
     if (this.ducked && this.volumeBefore !== null) await sp.setVolume(this.deviceId, this.volumeBefore);
   }
