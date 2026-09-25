@@ -952,7 +952,11 @@ function runSplash() {
     clearInterval(interval);
     void unlockAudio();
     splashScreen.classList.add("splash-fade-out");
-    setTimeout(() => { show(splashScreen, false); show(builderScreen, true); }, 400);
+    setTimeout(() => {
+      show(splashScreen, false);
+      // Only reveal the builder if nothing else took over during the fade.
+      if (liveScreen.classList.contains("hidden") && endScreen.classList.contains("hidden")) show(builderScreen, true);
+    }, 400);
   };
   setTimeout(finish, SPLASH_DURATION_MS);
   setTimeout(() => show($("splash-tap-hint"), true), SPLASH_TAP_HINT_DELAY_MS);
