@@ -18,8 +18,9 @@ export class SpotifyBed {
       this.volumeBefore = typeof d?.volume_percent === "number" ? d.volume_percent : null;
     } catch { /* keep null — we just won't restore */ }
     await sp.setVolume(this.deviceId, volumePercent);
-    await sp.setRepeat(this.deviceId, "track");
     await sp.playUris(this.deviceId, [this.track.uri]);
+    // Set after starting: starting new tracks can reset Spotify's repeat mode.
+    await sp.setRepeat(this.deviceId, "track");
   }
 
   pause() { return sp.pause(this.deviceId); }

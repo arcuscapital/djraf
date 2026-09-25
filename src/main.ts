@@ -25,7 +25,9 @@ let resumeTracks: Map<string, Track[]> | null = null;
 let nextId = Date.now();
 const makeId = () => "b" + nextId++;
 
-const computeTracks = () => assignSongs(blocks, source?.pool ?? [], source?.offset ?? 0);
+// The song picked as talk-over music is never also played in a songs block.
+const computeTracks = () =>
+  assignSongs(blocks, source?.pool ?? [], source?.offset ?? 0, bedChoice === "spotify" && bedTrack ? [bedTrack.uri] : []);
 function save() { store.saveBlocks(blocks); }
 
 const MODE_LABELS: Record<string, string> = { quiet: "🤫 Quiet", record: "🎙️ Recorded", background: "🎶 Background" };
@@ -545,6 +547,8 @@ function chooseBed(c: BedChoice) {
   bedChoice = c;
   store.saveBed(c);
   renderBeds();
+  invalidateResume();
+  renderBlocks(); // the songs blocks may change if the talk-over song was in them
 }
 document.querySelectorAll<HTMLButtonElement>(".bed-pill").forEach(b => {
   b.addEventListener("click", () => {
@@ -688,6 +692,16 @@ const ui = {
     const nb = blocks[i + 1];
     $("next-up").textContent = "Next up: " + (nb ? (nb.type === "songs" ? `Play ${nb.count} ${nb.count === 1 ? "Song" : "Songs"}` : TYPE_LABELS[nb.type]) : loopEnabled ? "Loop → start again" : "End of show");
     renderTimetable(i);
+  },
+  songList(tracks: Track[] | null, playing: number) {
+    const el = $("run-list");
+    show(el, !!tracks && tracks.length > 1);
+    if (!tracks) return;
+    el.innerHTML = tracks.map((t, i) => {
+      const state = i < playing ? "played" : i === playing ? "now" : "";
+      const mark = i < playing ? "✓" : i === playing ? "▶" : String(i + 1);
+      return `<li class="${state}"><span class="run-mark">${mark}</span><span class="run-title">${escapeHtml(t.name)}<small>${escapeHtml(t.artist)}</small></span></li>`;
+    }).join("");
   },
   trouble(msg: string | null) {
     show(trouble, !!msg);

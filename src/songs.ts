@@ -2,10 +2,11 @@ import type { Block, Track } from "./types";
 
 // Works out exactly which songs every songs block will play, in show order.
 // Songs he picked himself stay put; every other slot takes the next song from
-// the playlist, never repeating a song already used earlier in the same show.
-export function assignSongs(blocks: Block[], pool: Track[], offset: number): Map<string, Track[]> {
+// the playlist, never repeating a song already used earlier in the same show,
+// and never a song listed in `exclude` (e.g. the song he talks over).
+export function assignSongs(blocks: Block[], pool: Track[], offset: number, exclude: string[] = []): Map<string, Track[]> {
   const result = new Map<string, Track[]>();
-  const used = new Set<string>();
+  const used = new Set<string>(exclude);
   for (const b of blocks) {
     if (b.type !== "songs") continue;
     for (const t of b.manual ?? []) if (t) used.add(t.uri);

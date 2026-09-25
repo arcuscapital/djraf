@@ -40,6 +40,7 @@ export interface ShowUI {
   buttons(kind: "songs" | "talk" | "clip"): void;
   current(index: number): void;
   trouble(message: string | null): void;
+  songList(tracks: Track[] | null, playingIndex: number): void; // this block's songs, or null to hide
   finished(): void;
 }
 
@@ -94,6 +95,7 @@ export class Show {
     const token = ++this.token;
     const next = () => { if (token === this.token && this.running) this.run(i + 1); };
     const b = this.blocks[i];
+    if (b.type !== "songs") this.ui.songList(null, -1);
     if (b.type === "songs") this.seg = this.songs(b, next);
     else if (b.mode === "record") this.seg = this.clip(b, next, token);
     else this.seg = this.talk(b, next);
@@ -109,11 +111,13 @@ export class Show {
       return { pause() {}, resume() {}, stop: () => clearTimeout(t) };
     }
     this.ui.buttons("songs");
+    this.ui.songList(list, 0);
     this.ui.status("Now Playing", `Song 1 of ${list.length}`, "Starting…");
     this.ui.progress(0, list[0].durationMs / 1000);
     const run = new SongRun(this.deviceId, list, {
       onTrack: (idx, t) => {
         this.ui.trouble(null);
+        this.ui.songList(list, idx);
         this.ui.status("Now Playing", `Song ${idx + 1} of ${list.length}`, `${t.name} – ${t.artist}`);
       },
       onProgress: (ms, dur) => this.ui.progress(ms / 1000, dur / 1000),

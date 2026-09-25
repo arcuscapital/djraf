@@ -38,6 +38,11 @@ describe("assignSongs", () => {
     expect(m.get("a")!.length).toBe(2);
   });
 
+  it("never picks the talk-over song for a songs block", () => {
+    const m = assignSongs([{ id: "a", type: "songs", count: 2 }], pool, 0, [t(1).uri]);
+    expect(m.get("a")!.map(x => x.name)).toEqual(["Song 2", "Song 3"]);
+  });
+
   it("counts how many playlist songs a show uses", () => {
     expect(autoSongsUsed([{ id: "a", type: "songs", count: 3, manual: [t(9)] }, { id: "b", type: "songs", count: 2 }])).toBe(4);
   });
