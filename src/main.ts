@@ -6,7 +6,7 @@ import { assignSongs, autoSongsUsed } from "./songs";
 import { fromNowPlaying, fromPlaylist } from "./songSource";
 import * as sp from "./spotify";
 import * as store from "./storage";
-import type { BedId, Block, BlockType, SongSource, Track } from "./types";
+import type { BedChoice, BedId, Block, BlockType, SongSource, Track } from "./types";
 import { BUILD_ID, watchForUpdates } from "./update";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -15,7 +15,8 @@ const show = (el: HTMLElement, on: boolean) => el.classList.toggle("hidden", !on
 // ====================== STATE ======================
 let blocks: Block[] = store.loadBlocks();
 let source: SongSource | null = store.loadSource();
-let bedId: BedId = store.loadBed();
+let bedChoice: BedChoice = store.loadBed();
+let bedTrack: Track | null = store.loadBedTrack();
 let loopEnabled = store.loadLoop();
 let deviceId: string | null = null;
 let current: Show | null = null;
@@ -39,11 +40,10 @@ const endScreen = $("end-screen");
 const blocksList = $("blocks-list");
 const addModal = $("add-modal");
 const modeModal = $("mode-modal");
-const durationModal = $("duration-modal");
 const recorderModal = $("recorder-modal");
 const songsModal = $("songs-modal");
 const pickModal = $("pick-modal");
-const allModals = [addModal, modeModal, durationModal, recorderModal, songsModal, pickModal];
+const allModals = [addModal, modeModal, recorderModal, songsModal, pickModal];
 
 $("app-version-tag").textContent = "v2 · " + BUILD_ID;
 
@@ -58,7 +58,7 @@ function renderBlocks() {
     let right: string;
     if (block.type === "songs") {
       const names = (tracks.get(block.id) ?? []).map(t => t.name).join(" · ");
-      left = `<span class="block-icon">🎵</span><span class="block-text">Play <span class="song-count">${block.count}</span> Songs<span class="song-names">${names ? escapeHtml(names) : "Pick where songs come from ↑"}</span></span>`;
+      left = `<span class="block-icon">🎵</span><span class="block-text">Play <span class="song-count">${block.count}</span> ${block.count === 1 ? "Song" : "Songs"}<span class="song-names">${names ? escapeHtml(names) : "Pick where songs come from ↑"}</span></span>`;
       right = `<button class="num-btn" data-action="minus">−</button><button class="num-btn" data-action="plus">+</button><button class="delete-btn" data-action="delete">×</button>`;
     } else {
       const mode = (MODE_LABELS[block.mode ?? "quiet"] ?? "") + (block.mode === "record" && block.bed ? " + 🎶" : "");
@@ -73,6 +73,7 @@ function renderBlocks() {
         if (action === "plus") setCount(block, (block.count ?? 1) + 1);
         else if (action === "minus") setCount(block, (block.count ?? 1) - 1);
         else if (action === "delete") {
+          if (block.mode === "record" && !confirm("Delete your recording?")) return;
           if (block.mode === "record") void store.deleteRecording(block.id);
           blocks.splice(index, 1);
           invalidateResume();
@@ -218,6 +219,7 @@ function openModal(m: HTMLElement) {
   }
 }
 function hideModalsInternal() {
+  keepTakeIfAny();
   allModals.forEach(x => show(x, false));
   cancelRecording();
 }
@@ -234,6 +236,12 @@ window.addEventListener("popstate", () => {
   if (modalHistoryPushed) {
     modalHistoryPushed = false;
     hideModalsInternal();
+    return;
+  }
+  if (showHistoryPushed && current?.running) {
+    // The phone's back button/edge swipe mid-show pauses rather than stopping it.
+    history.pushState({ djrafShow: true }, "");
+    if (!current.paused) void current.togglePause().then(() => { pauseBtn.textContent = "Resume"; });
     return;
   }
   if (showHistoryPushed) {
@@ -256,7 +264,7 @@ document.querySelectorAll<HTMLButtonElement>(".block-type-btn").forEach(btn => {
       closeAllModals();
       return;
     }
-    openModeModal({ id: makeId(), type, mode: "quiet", duration: 15 }, true);
+    openModeModal({ id: makeId(), type, mode: "quiet" }, true);
   });
 });
 
@@ -274,10 +282,26 @@ document.querySelectorAll<HTMLButtonElement>(".mode-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     if (!target) return;
     const mode = btn.dataset.mode;
-    if (mode === "quiet" || mode === "background") openDurationModal(mode);
-    else openRecorder(mode === "record-bg" ? bedId : null);
+    if (mode === "quiet" || mode === "background") {
+      if (target.mode === "record") {
+        if (!confirm("This will delete your recording. OK?")) return;
+        void store.deleteRecording(target.id);
+      }
+      target.mode = mode;
+      target.bed = null;
+      target.bedTrack = undefined;
+      finalize();
+    } else {
+      openRecorder(mode === "record-bg" ? recordingBed() : null);
+    }
   });
 });
+
+// Recordings with music use the app's own music: turning a Spotify song down
+// on a phone turns the whole phone down, which would make his voice quiet too.
+function recordingBed(): BedId {
+  return bedChoice === "spotify" ? "chill" : bedChoice;
+}
 
 function finalize() {
   if (!target) return;
@@ -287,31 +311,6 @@ function finalize() {
   renderBlocks();
   closeAllModals();
 }
-
-// ---------- duration ----------
-let pendingMode: "quiet" | "background" = "quiet";
-const durValue = $<HTMLInputElement>("duration-value");
-const durUnit = $<HTMLSelectElement>("duration-unit");
-function openDurationModal(mode: "quiet" | "background") {
-  pendingMode = mode;
-  const secs = target?.duration ?? 15;
-  if (secs >= 60 && secs % 60 === 0) { durValue.value = String(secs / 60); durUnit.value = "minutes"; }
-  else { durValue.value = String(secs); durUnit.value = "seconds"; }
-  $("duration-modal-title").textContent = mode === "background" ? "How long should the music play?" : "How long?";
-  openModal(durationModal);
-}
-$("close-duration-modal").addEventListener("click", closeAllModals);
-$("duration-save-btn").addEventListener("click", () => {
-  if (!target) return;
-  const raw = parseFloat(durValue.value);
-  const v = isNaN(raw) || raw <= 0 ? 15 : raw;
-  const secs = durUnit.value === "minutes" ? Math.round(v * 60) : Math.round(v);
-  if (target.mode === "record") void store.deleteRecording(target.id);
-  target.mode = pendingMode;
-  target.duration = Math.min(secs, 3600);
-  target.bed = null;
-  finalize();
-});
 
 // ---------- recorder ----------
 const recorder = new Recorder();
@@ -326,6 +325,7 @@ let recBlob: Blob | null = null;
 let recSeconds = 0;
 let recInterval: number | null = null;
 const RECORD_LIMIT_S = 60;
+const fmtLimit = "1:00";
 
 function resetRecorderUI() {
   show(recMain, true);
@@ -337,6 +337,7 @@ function resetRecorderUI() {
   show(recSave, false);
   show(recRetry, false);
   recBlob = null;
+  $("close-recorder-modal").textContent = "Cancel";
 }
 function openRecorder(bed: BedId | null) {
   recBed = bed;
@@ -347,7 +348,7 @@ function openRecorder(bed: BedId | null) {
   openModal(recorderModal);
 }
 const bedName = (b: BedId) => ({ chill: "chill", hype: "hype", serious: "serious" })[b];
-const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 recMain.addEventListener("click", async () => {
   if (recorder.recording) { void finishRecording(); return; }
@@ -360,12 +361,12 @@ recMain.addEventListener("click", async () => {
   }
   if (recBed) void recordBed.start(recBed, 0.3);
   recSeconds = 0;
-  recTimer.textContent = "00:00";
+  recTimer.textContent = `0:00 / ${fmtLimit}`;
   show(recTimer, true);
   recMain.textContent = "⏹ Stop Recording";
   recInterval = window.setInterval(() => {
     recSeconds++;
-    recTimer.textContent = fmt(recSeconds);
+    recTimer.textContent = `${fmt(recSeconds)} / ${fmtLimit}`;
     if (recSeconds >= RECORD_LIMIT_S) void finishRecording();
   }, 1000);
 });
@@ -381,6 +382,25 @@ async function finishRecording() {
   show(recMain, false);
   show(recSave, true);
   show(recRetry, true);
+  $("close-recorder-modal").textContent = "🗑 Throw it away";
+}
+// Closing the recorder any way other than "Throw it away" keeps a finished take.
+function keepTakeIfAny() {
+  if (recBlob && target && !recorderModal.classList.contains("hidden")) void keepTake();
+}
+async function keepTake() {
+  if (!target || !recBlob) return;
+  const blob = recBlob;
+  recBlob = null;
+  await store.saveRecording(target.id, blob);
+  target.mode = "record";
+  target.bed = recBed;
+  target.bedTrack = undefined;
+  if (targetIsNew) blocks.push(target);
+  targetIsNew = false;
+  invalidateResume();
+  save();
+  renderBlocks();
 }
 function cancelRecording() {
   if (recInterval !== null) { clearInterval(recInterval); recInterval = null; }
@@ -389,13 +409,10 @@ function cancelRecording() {
   recPreview.pause();
 }
 recRetry.addEventListener("click", resetRecorderUI);
-$("close-recorder-modal").addEventListener("click", closeAllModals);
+$("close-recorder-modal").addEventListener("click", () => { recBlob = null; closeAllModals(); });
 recSave.addEventListener("click", async () => {
-  if (!target || !recBlob) return;
-  await store.saveRecording(target.id, recBlob);
-  target.mode = "record";
-  target.bed = recBed;
-  finalize();
+  await keepTake();
+  closeAllModals();
 });
 
 // ---------- songs block sheet ----------
@@ -517,30 +534,64 @@ $("choose-playlist-btn").addEventListener("click", async () => {
 // ====================== BACKGROUND MUSIC CHOICE ======================
 const previewBed = new BedPlayer();
 let previewTimer: number | null = null;
+let previewingSpotify = false;
 function renderBeds() {
-  document.querySelectorAll<HTMLButtonElement>(".bed-pill").forEach(b => b.classList.toggle("selected", b.dataset.bed === bedId));
+  document.querySelectorAll<HTMLButtonElement>(".bed-pill").forEach(b => b.classList.toggle("selected", b.dataset.bed === bedChoice));
+  const line = $("bed-song");
+  show(line, bedChoice === "spotify" && !!bedTrack);
+  line.textContent = bedTrack ? `🎵 ${bedTrack.name} – ${bedTrack.artist}` : "";
+}
+function chooseBed(c: BedChoice) {
+  bedChoice = c;
+  store.saveBed(c);
+  renderBeds();
 }
 document.querySelectorAll<HTMLButtonElement>(".bed-pill").forEach(b => {
   b.addEventListener("click", () => {
-    bedId = b.dataset.bed as BedId;
-    store.saveBed(bedId);
-    renderBeds();
+    const c = b.dataset.bed as BedChoice;
+    if (c === "spotify") { pickBedSong(); return; }
+    chooseBed(c);
     if (previewBed.playing) void startPreview();
   });
 });
+function pickBedSong() {
+  if (!source?.pool.length) {
+    renderSource("First choose where songs come from, then pick a song to talk over.");
+    return;
+  }
+  openPicker("Pick a song to talk over", source.pool.map(t => ({
+    title: t.name,
+    sub: t.artist,
+    onPick: () => {
+      bedTrack = t;
+      store.saveBedTrack(t);
+      chooseBed("spotify");
+      closeAllModals();
+    }
+  })));
+}
 async function startPreview() {
-  await unlockAudio();
-  await previewBed.start(bedId, 0.7);
+  stopPreview();
+  if (bedChoice === "spotify" && bedTrack) {
+    if (!deviceId && !(await ensureDevice())) return;
+    previewingSpotify = true;
+    await sp.setRepeat(deviceId!, "off");
+    await sp.playUris(deviceId!, [bedTrack.uri]);
+  } else {
+    await unlockAudio();
+    await previewBed.start(bedChoice === "spotify" ? "chill" : bedChoice, 0.7);
+  }
   $("bed-preview-btn").textContent = "⏹ Stop";
-  if (previewTimer !== null) clearTimeout(previewTimer);
   previewTimer = window.setTimeout(stopPreview, 10000);
 }
 function stopPreview() {
-  previewBed.stop(500);
+  if (previewBed.playing) previewBed.stop(500);
+  if (previewingSpotify && deviceId) void sp.pause(deviceId);
+  previewingSpotify = false;
   $("bed-preview-btn").textContent = "▶ Listen";
   if (previewTimer !== null) { clearTimeout(previewTimer); previewTimer = null; }
 }
-$("bed-preview-btn").addEventListener("click", () => (previewBed.playing ? stopPreview() : void startPreview()));
+$("bed-preview-btn").addEventListener("click", () => (previewBed.playing || previewingSpotify ? stopPreview() : void startPreview()));
 
 // ====================== LOOP ======================
 const loopToggle = $<HTMLInputElement>("loop-toggle");
@@ -549,16 +600,22 @@ loopToggle.addEventListener("change", () => { loopEnabled = loopToggle.checked; 
 
 // ====================== SPOTIFY CONNECTION ======================
 function showLoggedOut() {
+  show($("source-login-btn"), true);
+  show($("source-actions"), false);
   show($("login-btn"), true);
   show($("spotify-connected"), false);
   show($("device-hint"), false);
 }
 function showConnected() {
+  show($("source-login-btn"), false);
+  show($("source-actions"), true);
   show($("login-btn"), false);
   show($("device-hint"), false);
   show($("spotify-connected"), true);
 }
 function showNeedsDevice(msg?: string) {
+  show($("source-login-btn"), false);
+  show($("source-actions"), true);
   show($("login-btn"), false);
   show($("spotify-connected"), false);
   show($("device-hint"), true);
@@ -583,6 +640,12 @@ async function ensureDevice(): Promise<boolean> {
   return true;
 }
 $("login-btn").addEventListener("click", () => void login());
+$("source-login-btn").addEventListener("click", () => void login());
+// Coming back from the Spotify app: look for the phone as a speaker again, so
+// he rarely has to tap Refresh.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && isLoggedIn() && !current?.running) void ensureDevice();
+});
 $("refresh-device-btn").addEventListener("click", () => void ensureDevice());
 
 // ====================== LIVE SHOW ======================
@@ -623,7 +686,7 @@ const ui = {
   },
   current(i: number) {
     const nb = blocks[i + 1];
-    $("next-up").textContent = "Next up: " + (nb ? (nb.type === "songs" ? `Play ${nb.count} Songs` : TYPE_LABELS[nb.type]) : loopEnabled ? "Loop → start again" : "End of show");
+    $("next-up").textContent = "Next up: " + (nb ? (nb.type === "songs" ? `Play ${nb.count} ${nb.count === 1 ? "Song" : "Songs"}` : TYPE_LABELS[nb.type]) : loopEnabled ? "Loop → start again" : "End of show");
     renderTimetable(i);
   },
   trouble(msg: string | null) {
@@ -644,7 +707,7 @@ function renderTimetable(currentIndex: number) {
     chip.className = `timetable-chip ${b.type}`;
     if (i < currentIndex) chip.classList.add("played");
     if (i === currentIndex) chip.classList.add("current");
-    chip.innerHTML = `<span class="tt-icon">${TYPE_ICONS[b.type]}</span><span class="tt-label">${b.type === "songs" ? `${b.count} Songs` : SHORT_LABELS[b.type]}</span>`;
+    chip.innerHTML = `<span class="tt-icon">${TYPE_ICONS[b.type]}</span><span class="tt-label">${b.type === "songs" ? `${b.count} ${b.count === 1 ? "Song" : "Songs"}` : SHORT_LABELS[b.type]}</span>`;
     el.appendChild(chip);
   });
   (el.children[currentIndex] as HTMLElement | undefined)?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
@@ -661,7 +724,7 @@ async function startShow(from: number, tracks: Map<string, Track[]>) {
   await unlockAudio();
   stopPreview();
   current?.stop();
-  current = new Show(blocks, tracks, deviceId, () => bedId, ui, () => {
+  current = new Show(blocks, tracks, deviceId, () => ({ choice: bedChoice, track: bedTrack }), ui, () => {
     if (!loopEnabled) return null;
     advanceSource();
     return computeTracks();
@@ -715,7 +778,6 @@ function updateStartLabel() {
   const canResume = resumeFrom !== null;
   $("start-show-btn").textContent = canResume ? "▶ Resume Show" : "▶ Start Show";
   show($("restart-show-link"), canResume);
-  show($("new-show-link"), canResume);
 }
 
 function exitToBuilderInternal() {
@@ -739,13 +801,6 @@ function exitToBuilder() {
 
 $("start-show-btn").addEventListener("click", () => void prepareAndStart(resumeFrom ?? 0));
 $("restart-show-link").addEventListener("click", () => { invalidateResume(); void prepareAndStart(0); });
-$("new-show-link").addEventListener("click", () => {
-  if (!confirm("Start a brand new show? This resets your blocks back to the default show.")) return;
-  blocks = store.defaultBlocks();
-  invalidateResume();
-  save();
-  renderBlocks();
-});
 skipBtn.addEventListener("click", () => current?.skipSong());
 finishedBtn.addEventListener("click", () => current?.finishedTalking());
 pauseBtn.addEventListener("click", async () => {
@@ -754,7 +809,6 @@ pauseBtn.addEventListener("click", async () => {
   pauseBtn.textContent = current.paused ? "Resume" : "Pause everything";
 });
 $("stop-show-btn").addEventListener("click", exitToBuilder);
-$("modify-session-btn").addEventListener("click", exitToBuilder);
 $("play-again-btn").addEventListener("click", () => void prepareAndStart(0));
 $("back-to-builder-btn").addEventListener("click", exitToBuilder);
 

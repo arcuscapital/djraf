@@ -1,21 +1,21 @@
-import type { BedId, Block, SongSource } from "./types";
+import type { BedChoice, Block, SongSource, Track } from "./types";
 
 // This app shares a web address (arcuscapital.github.io) with the original
 // Krom FM, so browser storage is shared too — everything here uses its own
 // "djraf" names so neither app can touch the other's show or recordings.
 
-const KEYS = { blocks: "djraf_blocks", source: "djraf_source", bed: "djraf_bed", loop: "djraf_loop" };
+const KEYS = { blocks: "djraf_blocks", source: "djraf_source", bed: "djraf_bed", bedTrack: "djraf_bed_track", loop: "djraf_loop" };
 
 export function defaultBlocks(): Block[] {
   return [
-    { id: "b1", type: "jingle", mode: "quiet", duration: 3 },
+    { id: "b1", type: "jingle", mode: "quiet" },
     { id: "b2", type: "songs", count: 3 },
-    { id: "b3", type: "talk", mode: "quiet", duration: 15 },
+    { id: "b3", type: "talk", mode: "quiet" },
     { id: "b4", type: "songs", count: 3 },
-    { id: "b5", type: "bed", mode: "background", duration: 20 },
-    { id: "b6", type: "commercial", mode: "quiet", duration: 10 },
+    { id: "b5", type: "bed", mode: "background" },
+    { id: "b6", type: "commercial", mode: "quiet" },
     { id: "b7", type: "songs", count: 2 },
-    { id: "b8", type: "jingle", mode: "quiet", duration: 3 }
+    { id: "b8", type: "jingle", mode: "quiet" }
   ];
 }
 
@@ -35,8 +35,10 @@ export const loadBlocks = () => read<Block[]>(KEYS.blocks, defaultBlocks());
 export const saveBlocks = (b: Block[]) => write(KEYS.blocks, b);
 export const loadSource = () => read<SongSource | null>(KEYS.source, null);
 export const saveSource = (s: SongSource | null) => write(KEYS.source, s);
-export const loadBed = () => read<BedId>(KEYS.bed, "chill");
-export const saveBed = (b: BedId) => write(KEYS.bed, b);
+export const loadBed = () => read<BedChoice>(KEYS.bed, "chill");
+export const saveBed = (b: BedChoice) => write(KEYS.bed, b);
+export const loadBedTrack = () => read<Track | null>(KEYS.bedTrack, null);
+export const saveBedTrack = (t: Track | null) => write(KEYS.bedTrack, t);
 export const loadLoop = () => read<boolean>(KEYS.loop, false);
 export const saveLoop = (v: boolean) => write(KEYS.loop, v);
 

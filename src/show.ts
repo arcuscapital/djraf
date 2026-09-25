@@ -1,8 +1,24 @@
 import { BedPlayer, ClipPlayer, pauseAll, playChime, resumeAll } from "./audio";
 import { SongRun } from "./songRun";
 import * as sp from "./spotify";
+import { SpotifyBed } from "./spotifyBed";
 import { loadRecording } from "./storage";
-import type { BedId, Block, Track } from "./types";
+import type { BedChoice, Block, Track } from "./types";
+
+export interface BedSetting { choice: BedChoice; track: Track | null }
+
+// Background music under talk: either a built-in bed played by the app, or a
+// Spotify song he picked, played quietly on Spotify.
+interface Bed { start(): Promise<void>; pause(): Promise<unknown> | void; resume(): Promise<unknown> | void; stop(): Promise<void> | void }
+function makeBed(choice: BedChoice, track: Track | null | undefined, deviceId: string | null, volume: number): Bed {
+  if (choice === "spotify" && track && deviceId) {
+    const b = new SpotifyBed(deviceId, track);
+    return { start: () => b.start(Math.round(volume * 100)), pause: () => b.pause(), resume: () => b.resume(), stop: () => b.stop() };
+  }
+  const b = new BedPlayer();
+  const id = choice === "spotify" ? "chill" : choice;
+  return { start: () => b.start(id, volume), pause: () => pauseAll(), resume: () => resumeAll(), stop: () => b.stop(1200) };
+}
 
 export const TYPE_LABELS: Record<Block["type"], string> = {
   songs: "Songs",
@@ -13,7 +29,7 @@ export const TYPE_LABELS: Record<Block["type"], string> = {
 };
 
 const QUIET_COPY: Partial<Record<Block["type"], [string, string]>> = {
-  jingle: ["🎶 Jingle time!", "Listen to your jingle! Press green when it finishes."],
+  jingle: ["🎶 Jingle time!", "Sing your jingle! Press green when you're done."],
   talk: ["🎙️ You're on air, DJ!", "Tell us the weather, news & traffic! Press green when you're done."],
   commercial: ["📢 Your ad, DJ!", "Tell everyone about your product! Press green when you're done."]
 };
@@ -28,8 +44,8 @@ export interface ShowUI {
 }
 
 interface Segment {
-  pause(): Promise<void> | void;
-  resume(): Promise<void> | void;
+  pause(): Promise<unknown> | void;
+  resume(): Promise<unknown> | void;
   stop(): void;
   skip?(): Promise<void> | void; // "Skip this song"
   done?(): void; // "I'm finished talking"
@@ -46,7 +62,7 @@ export class Show {
     private blocks: Block[],
     private tracks: Map<string, Track[]>,
     private deviceId: string | null,
-    private bedId: () => BedId,
+    private bed: () => BedSetting,
     private ui: ShowUI,
     private loop: () => Map<string, Track[]> | null // returns fresh songs to loop with, or null to finish
   ) {}
@@ -80,7 +96,7 @@ export class Show {
     const b = this.blocks[i];
     if (b.type === "songs") this.seg = this.songs(b, next);
     else if (b.mode === "record") this.seg = this.clip(b, next, token);
-    else this.seg = this.timed(b, next);
+    else this.seg = this.talk(b, next);
     if (this.paused) void this.seg?.pause();
   }
 
@@ -108,40 +124,40 @@ export class Show {
     return { pause: () => run.pause(), resume: () => run.resume(), stop: () => run.stop(), skip: () => run.skip() };
   }
 
-  // ---------- quiet talk / talk over background music: counts down, green button ends early ----------
-  private timed(b: Block, next: () => void): Segment {
-    const total = Math.max(1, b.duration ?? 10);
-    let left = total;
-    const bed = b.mode === "background" ? new BedPlayer() : null;
+  // ---------- he talks (quietly, or over background music) ----------
+  // No timer: it waits for the green "I'm finished" button, so he's never cut
+  // off mid-sentence. Background music loops for as long as he talks.
+  private talk(b: Block, next: () => void): Segment {
+    const setting = this.bed();
+    const bed = b.mode === "background" ? makeBed(setting.choice, setting.track, this.deviceId, setting.choice === "spotify" ? 0.3 : 0.7) : null;
     const label = TYPE_LABELS[b.type];
     if (bed) {
-      void bed.start(this.bedId(), 0.7);
-      this.ui.status(label, "🎶 Background music playing", "Talk over it! Press green when done");
+      void bed.start();
+      const what = setting.choice === "spotify" && setting.track ? `🎵 ${setting.track.name}` : "🎶 Background music playing";
+      this.ui.status(label, what, "Talk over it! Press green when you're done.");
     } else {
       const [main, sub] = QUIET_COPY[b.type] ?? ["🎤 Your turn, DJ!", "Speak to your listeners! Press green when you're done."];
       this.ui.status(label, main, sub);
       if (b.type === "jingle") void playChime();
     }
     this.ui.buttons("talk");
-    this.ui.progress(0, total);
+    let elapsed = 0;
+    this.ui.progress(0, null);
     let timer: number | null = null;
-    const tick = () => {
-      left -= 1;
-      this.ui.progress(total - left, total);
-      if (left <= 0) finish();
-      else timer = window.setTimeout(tick, 1000);
-    };
+    const tick = () => { elapsed++; this.ui.progress(elapsed, null); timer = window.setTimeout(tick, 1000); };
+    let over = false;
     const finish = () => {
+      if (over) return;
+      over = true;
       if (timer !== null) clearTimeout(timer);
       timer = null;
-      bed?.stop(1200);
-      next();
+      void Promise.resolve(bed?.stop()).then(next);
     };
     timer = window.setTimeout(tick, 1000);
     return {
-      pause: () => { if (timer !== null) { clearTimeout(timer); timer = null; } return pauseAll(); },
-      resume: () => { if (timer === null) timer = window.setTimeout(tick, 1000); return resumeAll(); },
-      stop: () => { if (timer !== null) clearTimeout(timer); timer = null; bed?.stop(300); },
+      pause: () => { if (timer !== null) { clearTimeout(timer); timer = null; } return bed ? bed.pause() : pauseAll(); },
+      resume: () => { if (timer === null) timer = window.setTimeout(tick, 1000); return bed ? bed.resume() : resumeAll(); },
+      stop: () => { over = true; if (timer !== null) clearTimeout(timer); timer = null; void bed?.stop(); },
       done: finish
     };
   }
@@ -150,7 +166,7 @@ export class Show {
   private clip(b: Block, next: () => void, token: number): Segment {
     const label = TYPE_LABELS[b.type];
     const clip = new ClipPlayer();
-    const bed = b.bed ? new BedPlayer() : null;
+    const bed = b.bed ? makeBed(b.bed, b.bedTrack, this.deviceId, b.bed === "spotify" ? 0.25 : 0.35) : null;
     let progressTimer: number | null = null;
     let over = false;
     const finish = () => {
@@ -158,7 +174,8 @@ export class Show {
       over = true;
       if (progressTimer !== null) clearInterval(progressTimer);
       clip.stop();
-      if (bed) { bed.stop(1200); setTimeout(next, 900); } else next();
+      if (bed) void Promise.resolve(bed.stop()).then(() => setTimeout(next, b.bed === "spotify" ? 0 : 900));
+      else next();
     };
     this.ui.buttons("clip");
     this.ui.status(label, "▶ Playing recording...", b.bed ? "Recording + background music" : "Listen up!");
@@ -171,16 +188,16 @@ export class Show {
         setTimeout(finish, 2500);
         return;
       }
-      if (bed) { await bed.start(b.bed!, 0.35); await sp.sleep(700); }
+      if (bed) { await bed.start(); await sp.sleep(700); }
       if (token !== this.token || over) return;
       const ok = await clip.play(blob, finish);
       if (!ok) { setTimeout(finish, 1500); return; }
       progressTimer = window.setInterval(() => this.ui.progress(clip.position, clip.duration), 250);
     })();
     return {
-      pause: () => pauseAll(),
-      resume: () => resumeAll(),
-      stop: () => { over = true; if (progressTimer !== null) clearInterval(progressTimer); clip.stop(); bed?.stop(300); },
+      pause: () => { void bed?.pause(); return pauseAll(); },
+      resume: () => { void bed?.resume(); return resumeAll(); },
+      stop: () => { over = true; if (progressTimer !== null) clearInterval(progressTimer); clip.stop(); void bed?.stop(); },
       done: finish
     };
   }
