@@ -30,4 +30,5 @@ export interface SongSource {
   playlistId: string | null;
   pool: Track[];
   offset: number; // where the next show starts in the pool, so shows don't reuse songs
+  mode?: "nowPlaying" | "playlist"; // how it was picked
 }

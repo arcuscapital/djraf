@@ -58,17 +58,18 @@ export async function getDevices(): Promise<Device[]> {
 }
 
 // ---------- reading what's playing ----------
-interface RawTrack { uri: string; name: string; duration_ms: number; artists?: { name: string }[]; type?: string; is_local?: boolean }
+interface RawTrack { uri: string; name: string; duration_ms: number; artists?: { name: string }[]; type?: string; is_local?: boolean; linked_from?: { uri: string } }
 const toTrack = (t: RawTrack): Track => ({ uri: t.uri, name: t.name, artist: t.artists?.[0]?.name ?? "", durationMs: t.duration_ms });
 const isPlayable = (t: RawTrack | null | undefined): t is RawTrack => !!t && t.uri?.startsWith("spotify:track:") && !t.is_local;
 
-export interface NowPlaying { track: Track | null; contextUri: string | null; contextType: string | null; progressMs: number; isPlaying: boolean }
+export interface NowPlaying { track: Track | null; linkedUri: string | null; contextUri: string | null; contextType: string | null; progressMs: number; isPlaying: boolean }
 
 export async function getNowPlaying(): Promise<NowPlaying | null> {
   const d = await json<{ item: RawTrack | null; context: { uri: string; type: string } | null; progress_ms: number; is_playing: boolean }>("/me/player/currently-playing");
   if (!d) return null;
   return {
     track: isPlayable(d.item) ? toTrack(d.item) : null,
+    linkedUri: d.item?.linked_from?.uri ?? null,
     contextUri: d.context?.uri ?? null,
     contextType: d.context?.type ?? null,
     progressMs: d.progress_ms ?? 0,
@@ -93,6 +94,12 @@ export async function snapshot(): Promise<Snapshot> {
   } catch {
     return { ok: false, noContent: false, isPlaying: false, itemUri: null, progressMs: 0, durationMs: 0 };
   }
+}
+
+// One song by id (e.g. from a pasted link).
+export async function getTrack(id: string): Promise<Track | null> {
+  const d = await json<RawTrack>(`/tracks/${id}`);
+  return d && isPlayable(d) ? toTrack(d) : null;
 }
 
 // Spotify's own "up next" list — works for any playlist, including Spotify's.

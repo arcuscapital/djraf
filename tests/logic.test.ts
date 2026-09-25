@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assignSongs, autoSongsUsed } from "../src/songs";
 import { judgeRun, newRunState, type Snapshot } from "../src/runWatch";
+import { findCurrent, startingAt } from "../src/songs";
 import type { Block, Track } from "../src/types";
 
 const t = (n: number): Track => ({ uri: `spotify:track:${n}`, name: `Song ${n}`, artist: "A", durationMs: 180000 });
@@ -106,5 +107,30 @@ describe("judgeRun", () => {
 
   it("ignores failed reads", () => {
     expect(judgeRun(run, snap({ ok: false }), newRunState()).kind).toBe("unknown");
+  });
+});
+
+describe("starting from the song that's currently up", () => {
+  const now = (track: Track | null, linkedUri: string | null = null) => ({ track, linkedUri, contextUri: null, contextType: null, progressMs: 0, isPlaying: true });
+
+  it("starts at the current song, not the first or the next one", () => {
+    const at = findCurrent(pool, now(t(4)));
+    expect(at).toBe(3);
+    expect(startingAt(pool, at).map(x => x.name)).toEqual(["Song 4", "Song 5", "Song 6", "Song 7", "Song 1", "Song 2", "Song 3"]);
+  });
+
+  it("finds the song even when Spotify reports a relinked id", () => {
+    const relinked = { ...t(5), uri: "spotify:track:other-id" };
+    expect(findCurrent(pool, now(relinked, t(5).uri))).toBe(4);
+  });
+
+  it("falls back to matching by name and artist", () => {
+    expect(findCurrent(pool, now({ ...t(6), uri: "spotify:track:x" }))).toBe(5);
+  });
+
+  it("starts at the top when the song isn't in the playlist", () => {
+    const at = findCurrent(pool, now({ ...t(99), name: "Elsewhere" }));
+    expect(at).toBe(-1);
+    expect(startingAt(pool, at)[0].name).toBe("Song 1");
   });
 });

@@ -35,7 +35,7 @@ export const loadBlocks = () => read<Block[]>(KEYS.blocks, defaultBlocks());
 export const saveBlocks = (b: Block[]) => write(KEYS.blocks, b);
 export const loadSource = () => read<SongSource | null>(KEYS.source, null);
 export const saveSource = (s: SongSource | null) => write(KEYS.source, s);
-export const loadBed = () => read<BedChoice>(KEYS.bed, "chill");
+export const loadBed = () => read<BedChoice>(KEYS.bed, "spotify"); // default: talk over a Spotify song (Bumblebee)
 export const saveBed = (b: BedChoice) => write(KEYS.bed, b);
 export const loadBedTrack = () => read<Track | null>(KEYS.bedTrack, null);
 export const saveBedTrack = (t: Track | null) => write(KEYS.bedTrack, t);

@@ -16,8 +16,10 @@ const show = (el: HTMLElement, on: boolean) => el.classList.toggle("hidden", !on
 // ====================== STATE ======================
 let blocks: Block[] = store.loadBlocks();
 let source: SongSource | null = store.loadSource();
+// Default talk-over song (parent's pick): "Bumblebee" by Mike Franklyn.
+const DEFAULT_BED_TRACK: Track = { uri: "spotify:track:3hkBYWip4MNqI4G0sG6WFH", name: "Bumblebee", artist: "Mike Franklyn", durationMs: 120666 };
 let bedChoice: BedChoice = store.loadBed();
-let bedTrack: Track | null = store.loadBedTrack();
+let bedTrack: Track = store.loadBedTrack() ?? DEFAULT_BED_TRACK;
 let loopEnabled = store.loadLoop();
 let deviceId: string | null = null;
 let current: Show | null = null;
@@ -532,7 +534,7 @@ async function needLogin(): Promise<boolean> {
 $("use-playing-btn").addEventListener("click", async () => {
   if (await needLogin()) return;
   renderSource("Checking Spotify…");
-  const r = await fromNowPlaying();
+  const r = await fromNowPlaying(source);
   if (r.ok) setSource(r.source);
   else renderSource(r.message);
 });
@@ -563,8 +565,8 @@ let previewingSpotify = false;
 function renderBeds() {
   document.querySelectorAll<HTMLButtonElement>(".bed-pill").forEach(b => b.classList.toggle("selected", b.dataset.bed === bedChoice));
   const line = $("bed-song");
-  show(line, bedChoice === "spotify" && !!bedTrack);
-  line.textContent = bedTrack ? `🎵 ${bedTrack.name} – ${bedTrack.artist}` : "";
+  show(line, bedChoice === "spotify");
+  line.innerHTML = `🎵 ${escapeHtml(bedTrack.name)} – ${escapeHtml(bedTrack.artist)} <u>change</u>`;
 }
 function chooseBed(c: BedChoice) {
   bedChoice = c;
@@ -576,37 +578,66 @@ function chooseBed(c: BedChoice) {
 document.querySelectorAll<HTMLButtonElement>(".bed-pill").forEach(b => {
   b.addEventListener("click", () => {
     const c = b.dataset.bed as BedChoice;
-    if (c === "spotify") { pickBedSong(); return; }
+    // "Song": first tap picks it straight away (Bumblebee unless he chose
+    // another); tapping it again, or the song's name, changes the song.
+    if (c === "spotify" && bedChoice === "spotify") { void pickBedSong(); return; }
     chooseBed(c);
-    if (previewBed.playing) void startPreview();
+    if (previewBed.playing || previewingSpotify) void startPreview();
   });
 });
-function pickBedSong() {
-  if (!source?.pool.length) {
-    renderSource("First choose where songs come from, then pick a song to talk over.");
-    return;
-  }
-  openPicker("Pick a song to talk over", source.pool.map(t => ({
-    title: t.name,
-    sub: t.artist,
-    onPick: () => {
-      bedTrack = t;
-      store.saveBedTrack(t);
-      chooseBed("spotify");
-      closeAllModals();
-    }
-  })));
+$("bed-song").addEventListener("click", () => void pickBedSong());
+
+function setBedTrack(t: Track) {
+  bedTrack = t;
+  store.saveBedTrack(t);
+  chooseBed("spotify");
+  closeAllModals();
 }
+
+// Pick the song to talk over: the default, the song playing on Spotify right
+// now, a pasted Spotify song link, or any song from his playlist. Always opens,
+// even before he's chosen where the show's songs come from.
+async function pickBedSong() {
+  const rows: PickRow[] = [];
+  const add = (t: Track, label?: string) => {
+    if (rows.some(r => r.title.endsWith(t.name) && r.sub === t.artist)) return;
+    rows.push({ title: (label ?? "") + t.name, sub: t.artist, onPick: () => setBedTrack(t) });
+  };
+  add(DEFAULT_BED_TRACK, "🐝 ");
+  if (bedTrack.uri !== DEFAULT_BED_TRACK.uri) add(bedTrack, "✓ ");
+  if (isLoggedIn()) {
+    try {
+      const now = await sp.getNowPlaying();
+      if (now?.track) add(now.track, "▶ Playing now: ");
+    } catch { /* not important */ }
+  }
+  rows.push({ title: "🔗 Paste a Spotify song link", onPick: () => void pasteBedLink() });
+  for (const t of source?.pool ?? []) add(t);
+  openPicker("Pick a song to talk over", rows);
+}
+
+async function pasteBedLink() {
+  const link = prompt("Paste a Spotify song link:");
+  const id = link?.match(/track[/:]([A-Za-z0-9]{10,})/)?.[1];
+  if (!id) { if (link) alert("That doesn't look like a Spotify song link."); return; }
+  if (!isLoggedIn()) { alert("Please connect Spotify first!"); return; }
+  try {
+    const t = await sp.getTrack(id);
+    if (t) { setBedTrack(t); return; }
+  } catch { /* shown below */ }
+  alert("Couldn't find that song on Spotify.");
+}
+
 async function startPreview() {
   stopPreview();
-  if (bedChoice === "spotify" && bedTrack) {
+  if (bedChoice === "spotify") {
     if (!deviceId && !(await ensureDevice())) return;
     previewingSpotify = true;
     await sp.setRepeat(deviceId!, "off");
     await sp.playUris(deviceId!, [bedTrack.uri]);
   } else {
     await unlockAudio();
-    await previewBed.start(bedChoice === "spotify" ? "chill" : bedChoice, 0.7);
+    await previewBed.start(bedChoice, 0.7);
   }
   $("bed-preview-btn").textContent = "⏹ Stop";
   previewTimer = window.setTimeout(stopPreview, 10000);
@@ -671,8 +702,26 @@ $("source-login-btn").addEventListener("click", () => void login());
 // Coming back from the Spotify app: look for the phone as a speaker again, so
 // he rarely has to tap Refresh.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && isLoggedIn() && !current?.running) void ensureDevice();
+  if (document.visibilityState !== "visible" || !isLoggedIn() || current?.running || starting) return;
+  void ensureDevice();
+  void followWhatsUp();
 });
+
+// He picked "Use what's playing", went to Spotify and started a playlist (or
+// moved on in it), and came back: start from the song that's up there now.
+// Only when Spotify actually has a playlist on, so our own finished shows
+// (which play exact song lists) never pull it back to a song already played.
+async function followWhatsUp() {
+  if (!source || resumeFrom !== null) return;
+  let now: sp.NowPlaying | null = null;
+  try { now = await sp.getNowPlaying(); } catch { return; }
+  if (!now?.track || now.contextType !== "playlist") return;
+  const followsThis = source.mode === "nowPlaying" || now.contextUri === `spotify:playlist:${source.playlistId}`;
+  if (!followsThis) return;
+  if (source.pool[source.offset % source.pool.length]?.uri === now.track.uri) return; // already there
+  const r = source.mode === "nowPlaying" ? await fromNowPlaying(source) : await fromPlaylist(source.playlistId!, source.name);
+  if (r.ok && !current?.running) setSource(r.source);
+}
 $("refresh-device-btn").addEventListener("click", () => void ensureDevice());
 
 // ====================== LIVE SHOW ======================
@@ -832,7 +881,7 @@ async function prepareAndStartInner(from: number) {
     return;
   }
   if (hasSongs && !source) {
-    const r = await fromNowPlaying();
+    const r = await fromNowPlaying(source);
     if (!r.ok) { alert(r.message); return; }
     setSource(r.source);
   }

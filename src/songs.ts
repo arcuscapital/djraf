@@ -1,4 +1,28 @@
+import type { NowPlaying } from "./spotify";
 import type { Block, Track } from "./types";
+
+export function dedupe(tracks: Track[]): Track[] {
+  const seen = new Set<string>();
+  return tracks.filter(t => (seen.has(t.uri) ? false : (seen.add(t.uri), true)));
+}
+
+// Finds the song that's currently up in a playlist. Spotify sometimes reports a
+// different id for the same song than the one stored in the playlist
+// ("relinking" for the listener's country), so fall back to the linked id, then
+// to name + artist.
+export function findCurrent(list: Track[], now: NowPlaying | null): number {
+  const t = now?.track;
+  if (!t) return -1;
+  let i = list.findIndex(x => x.uri === t.uri || (now!.linkedUri !== null && x.uri === now!.linkedUri));
+  if (i === -1) i = list.findIndex(x => x.name === t.name && x.artist === t.artist);
+  return i;
+}
+
+// The playlist, rotated so the current song comes first (played from its start).
+export function startingAt(list: Track[], at: number): Track[] {
+  if (at <= 0) return dedupe(list);
+  return dedupe([...list.slice(at), ...list.slice(0, at)]);
+}
 
 // Works out exactly which songs every songs block will play, in show order.
 // Songs he picked himself stay put; every other slot takes the next song from

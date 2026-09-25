@@ -998,3 +998,5 @@ header h1 {
 .run-list li.played { opacity: 0.4; }
 .run-list li.played .run-title { text-decoration: line-through; }
 .run-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bed-song { cursor: pointer; }
+.bed-song u { color: #4A90E2; margin-left: 6px; }
