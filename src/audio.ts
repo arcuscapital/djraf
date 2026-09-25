@@ -18,17 +18,24 @@ export function audioCtx(): AudioContext {
   return ctx;
 }
 
+// Waking the sound engine can stay pending indefinitely (seen live in Brave),
+// so never wait on it for more than a moment — a stuck wake-up must not freeze
+// the recorder or the show.
+function wake(c: AudioContext): Promise<void> {
+  if (c.state === "running") return Promise.resolve();
+  return Promise.race([c.resume().catch(() => {}), new Promise<void>(r => setTimeout(r, 800))]);
+}
+
 // Call from a tap so the browser allows sound later in the show.
 export async function unlockAudio(): Promise<void> {
-  const c = audioCtx();
-  if (c.state !== "running") await c.resume().catch(() => {});
+  await wake(audioCtx());
 }
 
 let busy = 0;
 async function acquire(): Promise<AudioContext> {
   busy++;
   const c = audioCtx();
-  if (c.state !== "running") await c.resume().catch(() => {});
+  await wake(c);
   return c;
 }
 function release() {
@@ -38,7 +45,7 @@ function release() {
 
 let pausedByUser = false;
 export async function pauseAll() { pausedByUser = true; await ctx?.suspend().catch(() => {}); }
-export async function resumeAll() { pausedByUser = false; if (busy > 0) await ctx?.resume().catch(() => {}); }
+export async function resumeAll() { pausedByUser = false; if (busy > 0 && ctx) await wake(ctx); }
 
 // ---------- jingle chime (same three notes as the original app) ----------
 export async function playChime(): Promise<void> {

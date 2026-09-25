@@ -362,7 +362,7 @@ recMain.addEventListener("click", async () => {
   if (micStarting) return;
   micStarting = true;
   recMain.textContent = "🎤 Tap “Allow” to use the microphone…";
-  await unlockAudio();
+  void unlockAudio(); // recording itself doesn't need the sound engine
   try {
     await recorder.start();
   } catch {
