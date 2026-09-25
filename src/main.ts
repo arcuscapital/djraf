@@ -230,12 +230,23 @@ function closeAllModals() {
   hideModalsInternal();
   if (modalHistoryPushed) {
     modalHistoryPushed = false;
-    history.back();
+    goBack();
   }
 }
 
 let showHistoryPushed = false;
+// history.back() is answered a moment later by a popstate event. If a new
+// pop-up opened in that moment, that late event looked like the phone's back
+// button and closed it (caught in live testing). So count the backs we trigger
+// ourselves and ignore their popstate events.
+let ownBacks = 0;
+function goBack() {
+  ownBacks++;
+  history.back();
+}
+
 window.addEventListener("popstate", () => {
+  if (ownBacks > 0) { ownBacks--; return; }
   if (modalHistoryPushed) {
     modalHistoryPushed = false;
     hideModalsInternal();
@@ -835,7 +846,7 @@ function exitToBuilderInternal() {
 }
 function exitToBuilder() {
   exitToBuilderInternal();
-  if (showHistoryPushed) { showHistoryPushed = false; history.back(); }
+  if (showHistoryPushed) { showHistoryPushed = false; goBack(); }
 }
 
 $("start-show-btn").addEventListener("click", () => void prepareAndStart(resumeFrom ?? 0));
